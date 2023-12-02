@@ -194,7 +194,7 @@ class GenerateNAID:
             "scale": cfg,
             "uncond_scale": uncond_scale,
             "negative_prompt": negative,
-            "sm": smea == "SMEA",
+            "sm": smea == "SMEA" or smea == "SMEA+DYN",
             "sm_dyn": smea == "SMEA+DYN",
             "decrisper": False,
             "controlnet_strength": 1.0,
