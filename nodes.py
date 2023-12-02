@@ -1,3 +1,4 @@
+import random
 import dotenv
 import base64
 from hashlib import blake2b
@@ -169,6 +170,7 @@ class GenerateNAID:
     def INPUT_TYPES(s):
         return {
             "required": {
+                "size": (["Portrait", "Landscape", "Square", "Random", "Custom(Paid)", "Large Portrait(Paid)", "Large Landscape(Paid)"], { "default": "Portrait" }),
                 "width": ("INT", { "default": 832, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "height": ("INT", { "default": 1216, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "positive": ("STRING", { "default": "{}, best quality, amazing quality, very aesthetic, absurdres", "multiline": True, "dynamicPrompts": False }),
@@ -190,9 +192,43 @@ class GenerateNAID:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
+    
+    def sanitize_free_options(self, size, width, height, steps, option):
+        """
+        Validates the free options
+        """
+        if "Paid" in size:
+            return size, width, height, steps, option
+        # if width or height is not default, warn and reset to default
+        if size == 'Random':
+            size = random.choice(["Portrait", "Landscape", "Square"])
+        if size == "Portrait":
+            if width != 832 or height != 1216:
+                print("Overriding width and height to default values for Portrait")
+                width = 832
+                height = 1216 
+        elif size == "Landscape":
+            if width != 1216 or height != 832:
+                print("Overriding width and height to default values for Landscape")
+                width = 1216
+                height = 832
+        elif size == "Square":
+            if width != 1024 or height != 1024:
+                print("Overriding width and height to default values for Square")
+                width = 1024
+                height = 1024
+        if steps > 28:
+            print("Overriding steps to 28")
+            steps = 28
+        if "img2img" in option or "infill" in option:
+            print("Overriding option to None")
+            option = None
+        return size, width, height, steps, option
 
-    def generate(self, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, delay_max, fallback_black, option=None):
+    def generate(self, size, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, delay_max, fallback_black, option=None):
         # ref. novelai_api.ImagePreset
+        # We override the default values here for non-custom sizes
+        size, width, height, steps, option = self.sanitize_free_options(size, width, height, steps, option)
         params = {
             "legacy": False,
             "quality_toggle": False,
@@ -217,22 +253,23 @@ class GenerateNAID:
 
         model = "nai-diffusion-3"
         action = "generate"
-        if option:
-            if "img2img" in option:
-                action = "img2img"
-                image, strength, noise = option["img2img"]
-                params["image"] = imageToBase64(image)
-                params["strength"] = strength
-                params["noise"] = noise
-            elif "infill" in option:
-                action = "infill"
-                image, mask, add_original_image = option["infill"]
-                params["image"] = imageToBase64(image)
-                params["mask"] = naimaskToBase64(mask)
-                params["add_original_image"] = add_original_image
+        if "Paid" in size:
+            if option:
+                if "img2img" in option:
+                    action = "img2img"
+                    image, strength, noise = option["img2img"]
+                    params["image"] = imageToBase64(image)
+                    params["strength"] = strength
+                    params["noise"] = noise
+                elif "infill" in option:
+                    action = "infill"
+                    image, mask, add_original_image = option["infill"]
+                    params["image"] = imageToBase64(image)
+                    params["mask"] = naimaskToBase64(mask)
+                    params["add_original_image"] = add_original_image
 
-            if "model" in option:
-                model = option["model"]
+                if "model" in option:
+                    model = option["model"]
 
         if action == "infill" and model != "nai-diffusion-2":
             model = f"{model}-inpainting"
