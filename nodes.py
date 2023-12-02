@@ -193,11 +193,18 @@ class GenerateNAID:
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
     
-    def sanitize_free_options(self, size, width, height, steps, option):
+    def sanitize_options(self, size, width, height, steps, option):
         """
         Validates the free options
         """
         if "Paid" in size:
+            # sanitize Large Portrait and Large Landscape
+            if "Large Portrait" in size:
+                width = 1024
+                height = 1536
+            elif "Large Landscape" in size:
+                width = 1536
+                height = 1024
             return size, width, height, steps, option
         # if width or height is not default, warn and reset to default
         if size == 'Random':
@@ -229,7 +236,7 @@ class GenerateNAID:
     def generate(self, size, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, delay_max, fallback_black, option=None):
         # ref. novelai_api.ImagePreset
         # We override the default values here for non-custom sizes
-        size, width, height, steps, option = self.sanitize_free_options(size, width, height, steps, option)
+        size, width, height, steps, option = self.sanitize_options(size, width, height, steps, option)
         params = {
             "legacy": False,
             "quality_toggle": False,
@@ -314,7 +321,7 @@ class GenerateNAID:
 
         if delay_max > 0.0:
             # sleep
-            time.sleep(delay_max)
+            time.sleep(random.randint(2, delay_max))
 
         return (image,)
 
