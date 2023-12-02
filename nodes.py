@@ -220,9 +220,10 @@ class GenerateNAID:
         if steps > 28:
             print("Overriding steps to 28")
             steps = 28
-        if "img2img" in option or "infill" in option:
-            print("Overriding option to None")
-            option = {}
+        if option:
+            if "img2img" in option or "infill" in option:
+                print("Overriding option to None")
+                option = {}
         return size, width, height, steps, option
 
     def generate(self, size, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, delay_max, fallback_black, option=None):
