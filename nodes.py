@@ -5,6 +5,7 @@ import argon2
 
 import requests
 import json
+import time
 
 from os import environ as env
 import zipfile
@@ -18,6 +19,7 @@ import math
 import numpy as np
 from PIL import Image, ImageOps
 
+from .wildcards_nai import NAITextWildcards
 
 # cherry-picked from novelai_api.utils
 def argon_hash(email: str, password: str, size: int, domain: str) -> str:
@@ -39,9 +41,9 @@ def login(key) -> str:
     response.raise_for_status()
     return response.json()["accessToken"]
 
-def generate_image(access_token, prompt, model, action, parameters):
+def generate_image(access_token, prompt, model, action, parameters, timeout=120.0):
     data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
-    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" })
+    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
     response.raise_for_status()
     return response.content
 
@@ -144,6 +146,13 @@ class InpaintingOption:
 class GenerateNAID:
     def __init__(self):
         dotenv.load_dotenv()
+        self.handle_login()
+        self.output_dir = folder_paths.get_output_directory()
+    
+    def handle_login(self):
+        """
+        Logins and returns an access token
+        """
         if "NAI_ACCESS_KEY" in env:
             access_key = env["NAI_ACCESS_KEY"]
         elif "NAI_USERNAME" in env and "NAI_PASSWORD" in env:
@@ -152,9 +161,10 @@ class GenerateNAID:
             access_key = get_access_key(username, password)
         else:
             raise RuntimeError("Please ensure that NAI_ACCESS_KEY or NAI_USERNAME and NAI_PASSWORD are set in your environment")
-        self.access_token = login(access_key)
-        self.output_dir = folder_paths.get_output_directory()
-    
+        access_token = login(access_key)
+        self.access_token = access_token
+        return access_token
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -171,6 +181,8 @@ class GenerateNAID:
                 "seed": ("INT", { "default": 0, "min": 0, "max": 9999999999, "step": 1, "display": "number" }),
                 "uncond_scale": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.5, "step": 0.05, "display": "number" }),
                 "cfg_rescale": ("FLOAT", { "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.02, "display": "number" }),
+                "delay_max": ("FLOAT", { "default": 2.1, "min": 2.0, "max": 24000.0, "step": 0.1, "display": "number" }), # delay in seconds
+                "fallback_black": ("INT", { "default": 1, "min": 0, "max": 1, "step": 1, "display": "number" }), # 0: no fallback, 1: fallback to black image
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -179,7 +191,7 @@ class GenerateNAID:
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
 
-    def generate(self, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+    def generate(self, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, delay_max, fallback_black, option=None):
         # ref. novelai_api.ImagePreset
         params = {
             "legacy": False,
@@ -225,10 +237,36 @@ class GenerateNAID:
         if action == "infill" and model != "nai-diffusion-2":
             model = f"{model}-inpainting"
 
-        zipped_bytes = generate_image(self.access_token, positive, model, action, params)
-        zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
-        image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
-
+        retry_max = 5
+        retry_count = 0
+        zipped_bytes = None
+        while retry_count < retry_max:
+            try:
+                zipped_bytes = generate_image(self.access_token, positive, model, "generate", params, timeout = delay_max + 30)
+                break
+            # handle timeout
+            except requests.exceptions.ReadTimeout:
+                retry_count += 1
+                print(f"retrying {retry_count} after 20 seconds, relogin...")
+                time.sleep(20) # sleep for 20 seconds
+                self.handle_login() # refresh access token
+        if zipped_bytes is None and not fallback_black:
+            raise RuntimeError("Failed to generate image, possibly due to timeout")
+        
+        try:
+            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
+            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+            i = Image.open(io.BytesIO(image_bytes))
+            i = ImageOps.exif_transpose(i)
+            image = i.convert("RGB")
+            image = np.array(image).astype(np.float32) / 255.0
+            image = torch.from_numpy(image)[None,]
+        except Exception as exception:
+            if fallback_black:
+                image = torch.zeros((1, 3, height, width))
+            else:
+                raise exception
+        
         ## save original png to comfy output dir
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
         file = f"{filename}_{counter:05}_.png"
@@ -236,11 +274,9 @@ class GenerateNAID:
         d.mkdir(exist_ok=True)
         (d / file).write_bytes(image_bytes)
 
-        i = Image.open(io.BytesIO(image_bytes))
-        i = ImageOps.exif_transpose(i)
-        image = i.convert("RGB")
-        image = np.array(image).astype(np.float32) / 255.0
-        image = torch.from_numpy(image)[None,]
+        if delay_max > 0.0:
+            # sleep
+            time.sleep(delay_max)
 
         return (image,)
 
@@ -251,6 +287,7 @@ NODE_CLASS_MAPPINGS = {
     "Img2ImgOptionNAID": Img2ImgOption,
     "InpaintingOptionNAID": InpaintingOption,
     "ImageToNAIMask": ImageToNAIMask,
+    "NAITextWildcards": NAITextWildcards # Wildcards
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
@@ -258,4 +295,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
     "ImageToNAIMask": "Convert Image to NAI Mask",
+    "NAITextWildcards": "NAITextWildcards ✒️🅝🅐🅘"
 }
