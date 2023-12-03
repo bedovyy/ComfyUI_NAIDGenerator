@@ -289,8 +289,13 @@ class GenerateNAID:
             try:
                 zipped_bytes = generate_image(self.access_token, positive, model, "generate", params, timeout = delay_max + 30)
                 break
-            # handle timeout
-            except requests.exceptions.ReadTimeout:
+            # handle timeout, 500 errors
+            except (requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
+                # check 500 Internal Server Error
+                if isinstance(e, requests.exceptions.HTTPError):
+                    # wait for 60 seconds
+                    print(f"retrying {retry_count} after 60 seconds, relogin...")
+                    time.sleep(60) # sleep for 60 seconds
                 retry_count += 1
                 print(f"retrying {retry_count} after 20 seconds, relogin...")
                 time.sleep(20) # sleep for 20 seconds
