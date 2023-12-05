@@ -6,25 +6,14 @@ A [ComfyUI](https://github.com/comfyanonymous/ComfyUI) extension for generating 
 - or 'Install via Git URL' from [Comfyui Manager](https://github.com/ltdrdata/ComfyUI-Manager)
 
 ## Setting up NAI account
-Before using the nodes, you should set either NAI_USERNAME/NAI_PASSWORD or NAI_ACCESS_KEY on `ComfyUI/.env` file.
-
-### Setting NAI_ACCESS_KEY (recommended)
-Running the below command on `ComfyUI` directory.
-(If you use virtual environment such as `venv` or `conda`, you should do **activate** first.)
+Before using the nodes, you should set NAI_ACCESS_TOKEN on `ComfyUI/.env` file.
 ```
-python -c "from custom_nodes.ComfyUI_NAIDGenerator.nodes import get_access_key; print(get_access_key('<YOUR_EMAIL>', '<YOUR_PASSWORD>'))"
-```
-Then, paste the output on `ComfyUI/.env` file.
-```
-NAI_ACCESS_KEY=<OUTPUT_TEXT>
+NAI_ACCESS_TOKEN=<ACCESS_TOKEN>
 ```
 
-### Setting NAI_USERNAME and NAI_PASSWORD
-Instead of NAI_ACCESS_KEY, you can simply put your email and password of NovelAI account on `ComfyUI/.env` file.
-```
-NAI_USERNAME=<YOUR_EMAIL>
-NAI_PASSWORD=<YOUR_PASSWORD>
-```
+You can get persistent API token by **User Settings > Account > Get Persistent API Token** on NovelAI webpage.
+
+Otherwise, you can get access token which is valid for 30 days using [novelai-api](https://github.com/Aedial/novelai-api).
 
 ## Usage
 The nodes are located at `NovelAI` category.
@@ -34,7 +23,7 @@ The nodes are located at `NovelAI` category.
 ### Txt2img
 Simply connect `GenerateNAID` node and `SaveImage` node.
 
-![generate](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/1eed3062-2353-4986-8fb0-40f193d014db)
+![generate](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/1328896d-7d4b-4d47-8ec2-d1c4e8e2561c)
 
 Note that all generated images via `GeneratedNAID` node are saved as `output/NAI_autosave_12345_.png` for keeping original metadata.
 
@@ -65,3 +54,4 @@ The default model of `GenerateNAID` node is `nai-diffusion-3`(NAI Diffusion Anim
 If you want to change model, put `ModelOptionNAID` node to `GenerateNAID` node.
 
 ![ModelOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/0b484edb-bcb5-428a-b2af-1372a9d7a34f)
+

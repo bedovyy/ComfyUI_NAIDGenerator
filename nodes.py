@@ -11,10 +11,8 @@ import zipfile
 import io
 from pathlib import Path
 import folder_paths
-from datetime import datetime
 import torch
 import comfy.utils
-import math
 import numpy as np
 from PIL import Image, ImageOps
 
@@ -64,6 +62,13 @@ def naimaskToBase64(image):
     img.save(image_bytesIO, format="png")
     return base64.b64encode(image_bytesIO.getvalue()).decode()
 
+def calculateResolution(pixel_count, aspect_ratio):
+    pixel_count = pixel_count / 4096
+    w, h = aspect_ratio
+    k = (pixel_count * w / h) ** 0.5
+    width = np.floor(k) * 64
+    height = np.floor(k * h / w) * 64
+    return width, height
 
 class ImageToNAIMask:
     @classmethod
@@ -75,8 +80,8 @@ class ImageToNAIMask:
     CATEGORY = "NovelAI/utils"
     def convert(self, image):
         samples = image.movedim(-1,1)
-        width = math.ceil(samples.shape[3] / 64) * 8
-        height = math.ceil(samples.shape[2] / 64) * 8
+        width = np.ceil(samples.shape[3] / 64) * 8
+        height = np.ceil(samples.shape[2] / 64) * 8
         s = comfy.utils.common_upscale(samples, width, height, "nearest-exact", "disabled")
         s = s.movedim(1,-1)
         naimaskToBase64(s)
@@ -144,21 +149,28 @@ class InpaintingOption:
 class GenerateNAID:
     def __init__(self):
         dotenv.load_dotenv()
-        if "NAI_ACCESS_KEY" in env:
+        if "NAI_ACCESS_TOKEN" in env:
+            self.access_token = env["NAI_ACCESS_TOKEN"]
+        elif "NAI_ACCESS_KEY" in env:
+            print("ComfyUI_NAIDGenerator: NAI_ACCESS_KEY is deprecated. use NAI_ACCESS_TOKEN instead.")
             access_key = env["NAI_ACCESS_KEY"]
         elif "NAI_USERNAME" in env and "NAI_PASSWORD" in env:
+            print("ComfyUI_NAIDGenerator: NAI_USERNAME is deprecated. use NAI_ACCESS_TOKEN instead.")
             username = env["NAI_USERNAME"]
             password = env["NAI_PASSWORD"]
             access_key = get_access_key(username, password)
         else:
-            raise RuntimeError("Please ensure that NAI_ACCESS_KEY or NAI_USERNAME and NAI_PASSWORD are set in your environment")
-        self.access_token = login(access_key)
+            raise RuntimeError("Please ensure that NAI_API_TOKEN is set in ComfyUI/.env file.")
+
+        if not hasattr(self, "access_token"):
+            self.access_token = login(access_key)
         self.output_dir = folder_paths.get_output_directory()
     
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
                 "width": ("INT", { "default": 832, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "height": ("INT", { "default": 1216, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "positive": ("STRING", { "default": "{}, best quality, amazing quality, very aesthetic, absurdres", "multiline": True, "dynamicPrompts": False }),
@@ -166,7 +178,7 @@ class GenerateNAID:
                 "steps": ("INT", { "default": 28, "min": 0, "max": 50, "step": 1, "display": "number" }),
                 "cfg": ("FLOAT", { "default": 5.0, "min": 0.0, "max": 10.0, "step": 0.1, "display": "number" }),
                 "smea": (["none", "SMEA", "SMEA+DYN"], { "default": "none" }),
-                "sampler": (["k_euler", "k_euler_ancestral", "k_dpmpp_2s_ancestral", "k_dpmpp_2m", "k_dpmpp_sde"], { "default": "k_euler" }),
+                "sampler": (["k_euler", "k_euler_ancestral", "k_dpmpp_2s_ancestral", "k_dpmpp_2m", "k_dpmpp_sde", "ddim"], { "default": "k_euler" }),
                 "scheduler": (["native", "karras", "exponential", "polyexponential"], { "default": "native" }),
                 "seed": ("INT", { "default": 0, "min": 0, "max": 9999999999, "step": 1, "display": "number" }),
                 "uncond_scale": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.5, "step": 0.05, "display": "number" }),
@@ -179,7 +191,7 @@ class GenerateNAID:
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
 
-    def generate(self, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
         # ref. novelai_api.ImagePreset
         params = {
             "legacy": False,
@@ -202,9 +214,9 @@ class GenerateNAID:
             "cfg_rescale": cfg_rescale,
             "noise_schedule": scheduler,
         }
-
         model = "nai-diffusion-3"
         action = "generate"
+
         if option:
             if "img2img" in option:
                 action = "img2img"
@@ -221,6 +233,18 @@ class GenerateNAID:
 
             if "model" in option:
                 model = option["model"]
+
+        if limit_opus_free:
+            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-3",) else 640*640
+            if width * height > pixel_limit:
+                max_width, max_height = calculateResolution(pixel_limit, (width, height))
+                params["width"] = max_width
+                params["height"] = max_height
+            if steps > 28:
+                params["steps"] = 28
+
+        if sampler == "ddim" and model == "nai-diffusion-3":
+            params["sampler"] = "ddim_v3"
 
         if action == "infill" and model != "nai-diffusion-2":
             model = f"{model}-inpainting"
