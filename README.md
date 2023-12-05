@@ -31,7 +31,8 @@ Note that all generated images via `GeneratedNAID` node are saved as `output/NAI
 
 Connect `Img2ImgOptionNAID` node to `GenerateNAID` node and put original image.
 
-![Img2ImgOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/6e932fb0-bde2-478d-90b6-d14957243bb8)
+![Img2ImgOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/be2903a6-abc6-4071-9bb6-b04082282dd3)
+
 
 Note that width and height of the original image should be multiples of 64.
 
@@ -39,7 +40,7 @@ Note that width and height of the original image should be multiples of 64.
 
 Connect `InpaintingOptionNAID` node to `GenerateNAID` node and put original image and mask image.
 
-![InpaintingOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/bb692c95-51db-43f1-874a-cff3a094c5ea)
+![InpaintingOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/370e9f25-67a7-426d-aa22-cd3f9987f93e)
 
 Note that,
 - width and height of the original image should be multiples of 64
