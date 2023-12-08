@@ -1,74 +1,26 @@
 import dotenv
-import base64
-from hashlib import blake2b
-import argon2
-
-import requests
-import json
-
 from os import environ as env
-import zipfile
 import io
 from pathlib import Path
 import folder_paths
-import torch
-import comfy.utils
-import numpy as np
-from PIL import Image, ImageOps
+import zipfile
 
+from .utils import *
 
-# cherry-picked from novelai_api.utils
-def argon_hash(email: str, password: str, size: int, domain: str) -> str:
-    pre_salt = f"{password[:6]}{email}{domain}"
-    blake = blake2b(digest_size=16)
-    blake.update(pre_salt.encode())
-    salt = blake.digest()
-    raw = argon2.low_level.hash_secret_raw(password.encode(), salt, 2, int(2000000 / 1024), 1, size, argon2.low_level.Type.ID,)
-    hashed = base64.urlsafe_b64encode(raw).decode()
-    return hashed
+class PromptToNAID:
+    @classmethod
+    def INPUT_TYPES(s):
+        return { "required": {
+            "text": ("STRING", { "forceInput":True, "multiline": True, "dynamicPrompts": False,}),
+            "weight_per_brace": ("FLOAT", { "default": 0.05, "min": 0.05, "max": 0.10, "step": 0.05 }),
+        }}
 
-def get_access_key(email: str, password: str) -> str:
-    return argon_hash(email, password, 64, "novelai_data_access_key")[:64]
-
-
-BASE_URL="https://api.novelai.net"
-def login(key) -> str:
-    response = requests.post(f"{BASE_URL}/user/login", json={ "key": key })
-    response.raise_for_status()
-    return response.json()["accessToken"]
-
-def generate_image(access_token, prompt, model, action, parameters):
-    data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
-    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" })
-    response.raise_for_status()
-    return response.content
-
-
-def imageToBase64(image):
-    i = 255. * image[0].cpu().numpy()
-    img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
-    image_bytesIO = io.BytesIO()
-    img.save(image_bytesIO, format="png")
-    return base64.b64encode(image_bytesIO.getvalue()).decode()
-
-def naimaskToBase64(image):
-    i = 255. * image[0].cpu().numpy()
-    i = np.clip(i, 0, 255).astype(np.uint8)
-    alpha = np.sum(i, axis=-1) > 0
-    alpha = np.uint8(alpha * 255)
-    rgba = np.dstack((i, alpha))
-    img = Image.fromarray(rgba)
-    image_bytesIO = io.BytesIO()
-    img.save(image_bytesIO, format="png")
-    return base64.b64encode(image_bytesIO.getvalue()).decode()
-
-def calculateResolution(pixel_count, aspect_ratio):
-    pixel_count = pixel_count / 4096
-    w, h = aspect_ratio
-    k = (pixel_count * w / h) ** 0.5
-    width = np.floor(k) * 64
-    height = np.floor(k * h / w) * 64
-    return width, height
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "convert"
+    CATEGORY = "NovelAI/utils"
+    def convert(self, text, weight_per_brace):
+        nai_prompt = prompt_to_nai(text, weight_per_brace)
+        return (nai_prompt,)
 
 class ImageToNAIMask:
     @classmethod
@@ -79,12 +31,7 @@ class ImageToNAIMask:
     FUNCTION = "convert"
     CATEGORY = "NovelAI/utils"
     def convert(self, image):
-        samples = image.movedim(-1,1)
-        width = np.ceil(samples.shape[3] / 64) * 8
-        height = np.ceil(samples.shape[2] / 64) * 8
-        s = comfy.utils.common_upscale(samples, width, height, "nearest-exact", "disabled")
-        s = s.movedim(1,-1)
-        naimaskToBase64(s)
+        s = resize_to_naimask(image)
         return (s,)
 
 class ModelOption:
@@ -114,14 +61,13 @@ class Img2ImgOption:
                 "strength": ("FLOAT", { "default": 0.70, "min": 0.01, "max": 0.99, "step": 0.01, "display": "number" }),
                 "noise": ("FLOAT", { "default": 0.00, "min": 0.00, "max": 0.99, "step": 0.02, "display": "number" }),
             },
-#            "optional": { "option": ("NAID_OPTION",) },
         }
 
     RETURN_TYPES = ("NAID_OPTION",)
     FUNCTION = "set_option"
     CATEGORY = "NovelAI"
-    def set_option(self, image, strength, noise, option=None):
-        option = option or {}
+    def set_option(self, image, strength, noise):
+        option = {}
         option["img2img"] = (image, strength, noise)
         return (option,)
 
@@ -134,14 +80,13 @@ class InpaintingOption:
                 "mask": ("IMAGE",),
                 "add_original_image": ("BOOLEAN", { "default": True }),
             },
-#            "optional": { "option": ("NAID_OPTION",) },
         }
 
     RETURN_TYPES = ("NAID_OPTION",)
     FUNCTION = "set_option"
     CATEGORY = "NovelAI"
-    def set_option(self, image, mask, add_original_image, option=None):
-        option = option or {}
+    def set_option(self, image, mask, add_original_image):
+        option = {}
         option["infill"] = (image, mask, add_original_image)
         return (option,)
 
@@ -165,7 +110,7 @@ class GenerateNAID:
         if not hasattr(self, "access_token"):
             self.access_token = login(access_key)
         self.output_dir = folder_paths.get_output_directory()
-    
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -173,7 +118,7 @@ class GenerateNAID:
                 "limit_opus_free": ("BOOLEAN", { "default": True }),
                 "width": ("INT", { "default": 832, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "height": ("INT", { "default": 1216, "min": 64, "max": 1600, "step": 64, "display": "number" }),
-                "positive": ("STRING", { "default": "{}, best quality, amazing quality, very aesthetic, absurdres", "multiline": True, "dynamicPrompts": False }),
+                "positive": ("STRING", { "default": ", best quality, amazing quality, very aesthetic, absurdres", "multiline": True, "dynamicPrompts": False }),
                 "negative": ("STRING", { "default": "lowres", "multiline": True, "dynamicPrompts": False }),
                 "steps": ("INT", { "default": 28, "min": 0, "max": 50, "step": 1, "display": "number" }),
                 "cfg": ("FLOAT", { "default": 5.0, "min": 0.0, "max": 10.0, "step": 0.1, "display": "number" }),
@@ -221,14 +166,14 @@ class GenerateNAID:
             if "img2img" in option:
                 action = "img2img"
                 image, strength, noise = option["img2img"]
-                params["image"] = imageToBase64(image)
+                params["image"] = image_to_base64(resize_image(image, (width, height)))
                 params["strength"] = strength
                 params["noise"] = noise
             elif "infill" in option:
                 action = "infill"
                 image, mask, add_original_image = option["infill"]
-                params["image"] = imageToBase64(image)
-                params["mask"] = naimaskToBase64(mask)
+                params["image"] = image_to_base64(resize_image(image, (width, height)))
+                params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height)))
                 params["add_original_image"] = add_original_image
 
             if "model" in option:
@@ -260,12 +205,7 @@ class GenerateNAID:
         d.mkdir(exist_ok=True)
         (d / file).write_bytes(image_bytes)
 
-        i = Image.open(io.BytesIO(image_bytes))
-        i = ImageOps.exif_transpose(i)
-        image = i.convert("RGB")
-        image = np.array(image).astype(np.float32) / 255.0
-        image = torch.from_numpy(image)[None,]
-
+        image = bytes_to_image(image_bytes)
         return (image,)
 
 
@@ -274,12 +214,14 @@ NODE_CLASS_MAPPINGS = {
     "ModelOptionNAID": ModelOption,
     "Img2ImgOptionNAID": Img2ImgOption,
     "InpaintingOptionNAID": InpaintingOption,
-    "ImageToNAIMask": ImageToNAIMask,
+    "MaskImageToNAID": ImageToNAIMask,
+    "PromptToNAID": PromptToNAID,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
     "ModelOptionNAID": "ModelOption ✒️🅝🅐🅘",
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
-    "ImageToNAIMask": "Convert Image to NAI Mask",
+    "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
+    "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
 }

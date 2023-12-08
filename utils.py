@@ -1,0 +1,134 @@
+from hashlib import blake2b
+import argon2
+
+import base64
+import io
+import requests
+import comfy.utils
+
+import torch
+import numpy as np
+from PIL import Image, ImageOps
+
+# cherry-picked from novelai_api.utils
+def argon_hash(email: str, password: str, size: int, domain: str) -> str:
+    pre_salt = f"{password[:6]}{email}{domain}"
+    blake = blake2b(digest_size=16)
+    blake.update(pre_salt.encode())
+    salt = blake.digest()
+    raw = argon2.low_level.hash_secret_raw(password.encode(), salt, 2, int(2000000 / 1024), 1, size, argon2.low_level.Type.ID,)
+    hashed = base64.urlsafe_b64encode(raw).decode()
+    return hashed
+
+def get_access_key(email: str, password: str) -> str:
+    return argon_hash(email, password, 64, "novelai_data_access_key")[:64]
+
+
+BASE_URL="https://api.novelai.net"
+def login(key) -> str:
+    response = requests.post(f"{BASE_URL}/user/login", json={ "key": key })
+    response.raise_for_status()
+    return response.json()["accessToken"]
+
+def generate_image(access_token, prompt, model, action, parameters):
+    data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
+    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" })
+    response.raise_for_status()
+    return response.content
+
+
+def image_to_base64(image):
+    i = 255. * image[0].cpu().numpy()
+    img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+    image_bytesIO = io.BytesIO()
+    img.save(image_bytesIO, format="png")
+    return base64.b64encode(image_bytesIO.getvalue()).decode()
+
+def naimask_to_base64(image):
+    i = 255. * image[0].cpu().numpy()
+    i = np.clip(i, 0, 255).astype(np.uint8)
+    alpha = np.sum(i, axis=-1) > 0
+    alpha = np.uint8(alpha * 255)
+    rgba = np.dstack((i, alpha))
+    img = Image.fromarray(rgba)
+    image_bytesIO = io.BytesIO()
+    img.save(image_bytesIO, format="png")
+    return base64.b64encode(image_bytesIO.getvalue()).decode()
+
+def bytes_to_image(bytes):
+    i = Image.open(io.BytesIO(bytes))
+    i = ImageOps.exif_transpose(i)
+    image = i.convert("RGB")
+    image = np.array(image).astype(np.float32) / 255.0
+    return torch.from_numpy(image)[None,]
+
+def resize_image(image, resolution):
+    samples = image.movedim(-1,1)
+    w, h = resolution
+    s = comfy.utils.common_upscale(samples, w, h, "bilinear", "disabled")
+    s = s.movedim(1,-1)
+    return s
+
+def resize_to_naimask(mask, resolution=None):
+    samples = mask.movedim(-1,1)
+    w, h = (samples.shape[3], samples.shape[2]) if not resolution else resolution
+    width = int(np.ceil(w / 64) * 8)
+    height = int(np.ceil(h / 64) * 8)
+    s = comfy.utils.common_upscale(samples, width, height, "nearest-exact", "disabled")
+    s = s.movedim(1,-1)
+    return s
+
+def calculateResolution(pixel_count, aspect_ratio):
+    pixel_count = pixel_count / 4096
+    w, h = aspect_ratio
+    k = (pixel_count * w / h) ** 0.5
+    width = int(np.floor(k) * 64)
+    height = int(np.floor(k * h / w) * 64)
+    return width, height
+
+
+def prompt_to_stack(sentence):
+    result = []
+    current_str = ""
+    stack = [{ "weight": 1.0, "data": result }]
+
+    for i, c in enumerate(sentence):
+        if c in '()':
+            # current_str = current_str.strip()
+            if c == '(':
+                if current_str: stack[-1]["data"].append(current_str)
+                stack[-1]["data"].append({ "weight": 1.0, "data": [] });
+                stack.append(stack[-1]["data"][-1])
+            elif c == ')':
+                split = current_str.split(':')
+                current_str = split[0]
+                weight = split[1] if len(split) > 1 else "1.1"
+                if current_str: stack[-1]["data"].append(current_str)
+                stack[-1]["weight"] = float(weight)
+                if stack[-1]["data"] != result: # no more to pop
+                    stack.pop()
+                else:
+                    print("error  :", sentence);
+                    print(f"col {i:>3}:", " " * i + "^")
+                    # raise Exception('Error durring parsing parentheses', sentence, i, c)
+            current_str = ""
+        else:
+            current_str += c
+
+    if current_str:
+        stack[-1]["data"].append(current_str)
+
+    return result
+
+def prompt_stack_to_nai(l, weight_per_brace=0.05):
+    result = ""
+    for el in l:
+        if isinstance(el, dict):
+            brace_count = round((el["weight"] - 1.0) / weight_per_brace)
+            result += "{" * brace_count + "[" * -brace_count + prompt_stack_to_nai(el["data"]) + "}" * brace_count + "]" * -brace_count
+        else:
+            result += el
+    return result
+
+def prompt_to_nai(prompt, weight_per_brace=0.05):
+    return prompt_stack_to_nai(prompt_to_stack(prompt.replace("\(", "（").replace("\)", "）")), weight_per_brace).replace("（", "(").replace("）",")")
