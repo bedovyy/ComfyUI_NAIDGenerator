@@ -3,6 +3,7 @@ import argon2
 
 import base64
 import io
+import re
 import requests
 import comfy.utils
 
@@ -55,23 +56,23 @@ def naimask_to_base64(image):
     img.save(image_bytesIO, format="png")
     return base64.b64encode(image_bytesIO.getvalue()).decode()
 
-def bytes_to_image(bytes):
-    i = Image.open(io.BytesIO(bytes))
+def bytes_to_image(image_bytes):
+    i = Image.open(io.BytesIO(image_bytes))
     i = ImageOps.exif_transpose(i)
     image = i.convert("RGB")
     image = np.array(image).astype(np.float32) / 255.0
     return torch.from_numpy(image)[None,]
 
-def resize_image(image, resolution):
+def resize_image(image, size_to):
     samples = image.movedim(-1,1)
-    w, h = resolution
+    w, h = size_to
     s = comfy.utils.common_upscale(samples, w, h, "bilinear", "disabled")
     s = s.movedim(1,-1)
     return s
 
-def resize_to_naimask(mask, resolution=None):
+def resize_to_naimask(mask, image_size=None):
     samples = mask.movedim(-1,1)
-    w, h = (samples.shape[3], samples.shape[2]) if not resolution else resolution
+    w, h = (samples.shape[3], samples.shape[2]) if not image_size else image_size
     width = int(np.ceil(w / 64) * 8)
     height = int(np.ceil(h / 64) * 8)
     s = comfy.utils.common_upscale(samples, width, height, "nearest-exact", "disabled")
@@ -100,14 +101,13 @@ def prompt_to_stack(sentence):
                 stack[-1]["data"].append({ "weight": 1.0, "data": [] });
                 stack.append(stack[-1]["data"][-1])
             elif c == ')':
-                split = current_str.split(':')
-                current_str = split[0]
-                weight = split[1] if len(split) > 1 else "1.1"
+                searched = re.search(r"^(.*):([0-9\.]+)$", current_str)
+                current_str, weight = searched.groups() if searched else (current_str, 1.1)
                 if current_str: stack[-1]["data"].append(current_str)
                 stack[-1]["weight"] = float(weight)
-                if stack[-1]["data"] != result: # no more to pop
+                if stack[-1]["data"] != result:
                     stack.pop()
-                else:
+                else: # no more to pop
                     print("error  :", sentence);
                     print(f"col {i:>3}:", " " * i + "^")
                     # raise Exception('Error durring parsing parentheses', sentence, i, c)
