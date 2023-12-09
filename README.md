@@ -45,7 +45,7 @@ Note that both source image and mask will be resized fit to generation size.
 
 (You don't need `MaskImageToNAID` node to convert mask image to NAID mask image.)
 
-### ModelOption (Testing)
+### ModelOption
 
 The default model of `GenerateNAID` node is `nai-diffusion-3`(NAI Diffusion Anime V3).
 
