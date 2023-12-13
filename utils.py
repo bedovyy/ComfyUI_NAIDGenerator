@@ -79,7 +79,7 @@ def resize_to_naimask(mask, image_size=None):
     s = s.movedim(1,-1)
     return s
 
-def calculateResolution(pixel_count, aspect_ratio):
+def calculate_resolution(pixel_count, aspect_ratio):
     pixel_count = pixel_count / 4096
     w, h = aspect_ratio
     k = (pixel_count * w / h) ** 0.5

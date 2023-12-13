@@ -137,6 +137,8 @@ class GenerateNAID:
     CATEGORY = "NovelAI"
 
     def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+        width, height = calculate_resolution(width*height, (width, height))
+
         # ref. novelai_api.ImagePreset
         params = {
             "legacy": False,
@@ -182,7 +184,7 @@ class GenerateNAID:
         if limit_opus_free:
             pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-3",) else 640*640
             if width * height > pixel_limit:
-                max_width, max_height = calculateResolution(pixel_limit, (width, height))
+                max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
                 params["height"] = max_height
             if steps > 28:
