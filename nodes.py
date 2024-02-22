@@ -90,6 +90,24 @@ class InpaintingOption:
         option["infill"] = (image, mask, add_original_image)
         return (option,)
 
+class VibeTransferOption:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "information_extracted": ("FLOAT", { "default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
+                "strength": ("FLOAT", { "default": 0.6, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
+            },
+        }
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI"
+    def set_option(self, image, information_extracted, strength):
+        option = {}
+        option["vibe"] = (image, information_extracted, strength)
+        return (option,)
+
 
 class GenerateNAID:
     def __init__(self):
@@ -177,6 +195,11 @@ class GenerateNAID:
                 params["image"] = image_to_base64(resize_image(image, (width, height)))
                 params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height)))
                 params["add_original_image"] = add_original_image
+            elif "vibe" in option:
+                image, information_extracted, strength = option["vibe"]
+                params["reference_image"] = image_to_base64(resize_image(image, (width, height)))
+                params["reference_information_extracted"] = information_extracted
+                params["reference_strength"] = strength
 
             if "model" in option:
                 model = option["model"]
@@ -216,6 +239,7 @@ NODE_CLASS_MAPPINGS = {
     "ModelOptionNAID": ModelOption,
     "Img2ImgOptionNAID": Img2ImgOption,
     "InpaintingOptionNAID": InpaintingOption,
+    "VibeTransferOptionNAID": VibeTransferOption,
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
 }
@@ -224,6 +248,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ModelOptionNAID": "ModelOption ✒️🅝🅐🅘",
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
+    "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
 }
