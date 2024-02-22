@@ -25,7 +25,7 @@ def get_access_key(email: str, password: str) -> str:
     return argon_hash(email, password, 64, "novelai_data_access_key")[:64]
 
 
-BASE_URL="https://api.novelai.net"
+BASE_URL="https://image.novelai.net"
 def login(key) -> str:
     response = requests.post(f"{BASE_URL}/user/login", json={ "key": key })
     response.raise_for_status()
