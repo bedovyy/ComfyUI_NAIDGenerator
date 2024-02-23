@@ -100,13 +100,13 @@ class VibeTransferOption:
                 "strength": ("FLOAT", { "default": 0.6, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
             },
         }
-    RETURN_TYPES = ("NAID_OPTION",)
+    RETURN_TYPES = ("VibeTransfer_OPTION",)
     FUNCTION = "set_option"
     CATEGORY = "NovelAI"
     def set_option(self, image, information_extracted, strength):
-        option = {}
-        option["vibe"] = (image, information_extracted, strength)
-        return (option,)
+        VibeTransfer = {}
+        VibeTransfer["vibe"] = (image, information_extracted, strength)
+        return (VibeTransfer,)
 
 
 class GenerateNAID:
@@ -147,14 +147,15 @@ class GenerateNAID:
                 "uncond_scale": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.5, "step": 0.05, "display": "number" }),
                 "cfg_rescale": ("FLOAT", { "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.02, "display": "number" }),
             },
-            "optional": { "option": ("NAID_OPTION",) },
+            "optional": { "option": ("NAID_OPTION",), "VibeTransfer": ("VibeTransfer_OPTION",) },
+            
         }
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
 
-    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None, VibeTransfer=None):
         width, height = calculate_resolution(width*height, (width, height))
 
         # ref. novelai_api.ImagePreset
@@ -195,14 +196,16 @@ class GenerateNAID:
                 params["image"] = image_to_base64(resize_image(image, (width, height)))
                 params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height)))
                 params["add_original_image"] = add_original_image
-            elif "vibe" in option:
-                image, information_extracted, strength = option["vibe"]
-                params["reference_image"] = image_to_base64(resize_image(image, (width, height)))
-                params["reference_information_extracted"] = information_extracted
-                params["reference_strength"] = strength
 
             if "model" in option:
                 model = option["model"]
+
+        if VibeTransfer:
+            if "vibe" in VibeTransfer:
+                image, information_extracted, strength = VibeTransfer["vibe"]
+                params["reference_image"] = image_to_base64(resize_image(image, (width, height)))
+                params["reference_information_extracted"] = information_extracted
+                params["reference_strength"] = strength        
 
         if limit_opus_free:
             pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-3",) else 640*640
