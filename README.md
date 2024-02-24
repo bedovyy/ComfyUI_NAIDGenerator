@@ -51,7 +51,11 @@ Connect `VibeTransferOptionNAID` node to `GenerateNAID` node and put reference i
 
 ![Comfy_workflow](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/8c6c1c2e-f29d-42a1-b615-439155cb3164)
 
-Note that width and height of the source image will be resized to generation size.
+You can also relay Img2ImgOption on it.
+
+![image](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/acf0496c-8c7c-48f4-9530-18e6a23669d5)
+
+Note that width and height of the source images will be resized to generation size. **This will change aspect ratio of source images.**
 
 ### ModelOption
 
