@@ -99,12 +99,13 @@ class VibeTransferOption:
                 "information_extracted": ("FLOAT", { "default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
                 "strength": ("FLOAT", { "default": 0.6, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
             },
+            "optional": { "option": ("NAID_OPTION",) },
         }
     RETURN_TYPES = ("NAID_OPTION",)
     FUNCTION = "set_option"
     CATEGORY = "NovelAI"
-    def set_option(self, image, information_extracted, strength):
-        option = {}
+    def set_option(self, image, information_extracted, strength, option=None):
+        option = option or {}
         option["vibe"] = (image, information_extracted, strength)
         return (option,)
 
@@ -195,7 +196,8 @@ class GenerateNAID:
                 params["image"] = image_to_base64(resize_image(image, (width, height)))
                 params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height)))
                 params["add_original_image"] = add_original_image
-            elif "vibe" in option:
+
+            if "vibe" in option:
                 image, information_extracted, strength = option["vibe"]
                 params["reference_image"] = image_to_base64(resize_image(image, (width, height)))
                 params["reference_information_extracted"] = information_extracted
