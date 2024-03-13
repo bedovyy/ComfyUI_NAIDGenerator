@@ -25,12 +25,12 @@ def get_access_key(email: str, password: str) -> str:
     return argon_hash(email, password, 64, "novelai_data_access_key")[:64]
 
 
-BASE_URL="https://image.novelai.net"
 def login(key) -> str:
-    response = requests.post(f"{BASE_URL}/user/login", json={ "key": key })
+    response = requests.post(f"https://api.novelai.net/user/login", json={ "key": key })
     response.raise_for_status()
     return response.json()["accessToken"]
 
+BASE_URL="https://image.novelai.net"
 def generate_image(access_token, prompt, model, action, parameters):
     data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
     response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" })
