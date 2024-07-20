@@ -106,7 +106,29 @@ class VibeTransferOption:
     CATEGORY = "NovelAI"
     def set_option(self, image, information_extracted, strength, option=None):
         option = option or {}
-        option["vibe"] = (image, information_extracted, strength)
+        if "vibe" not in option:
+            option["vibe"] = []
+
+        option["vibe"].append((image, information_extracted, strength))
+        return (option,)
+
+class NetworkOption:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "timeout_sec": ("INT", { "default": 300, "min": 30, "max": 3000, "step": 1, "display": "number" }),
+                "ignore_errors": ("BOOLEAN", { "default": True }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI"
+    def set_option(self, timeout_sec, ignore_errors, option=None):
+        option = option or {}
+        option["timeout"] = timeout_sec
+        option["ignore_errors"] = ignore_errors
         return (option,)
 
 
@@ -160,25 +182,29 @@ class GenerateNAID:
 
         # ref. novelai_api.ImagePreset
         params = {
-            "legacy": False,
-            "quality_toggle": False,
+            "params_version": 1,
             "width": width,
             "height": height,
-            "n_samples": 1,
-            "seed": seed,
-            "extra_noise_seed": seed,
+            "scale": cfg,
             "sampler": sampler,
             "steps": steps,
-            "scale": cfg,
-            "uncond_scale": uncond_scale,
-            "negative_prompt": negative,
+            "seed": seed,
+            "n_samples": 1,
+            "ucPreset": 3,            #TODO: do I have to change it even if tags already typed by user?
+            "qualityToggle": False,   #TODO: do I have to change it even if tags already typed by user?
             "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
             "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
-            "decrisper": False,
+            "dynamic_thresholding": False,
             "controlnet_strength": 1.0,
+            "legacy": False,
             "add_original_image": False,
             "cfg_rescale": cfg_rescale,
             "noise_schedule": scheduler,
+            "legacy_v3_extend": False,    #TODO: find what it is
+            "uncond_scale": uncond_scale,
+            "negative_prompt": negative,
+#            "extra_noise_seed": seed,    #TODO: find why it disappear
+#            "decrisper": False,
         }
         model = "nai-diffusion-3"
         action = "generate"
@@ -198,10 +224,15 @@ class GenerateNAID:
                 params["add_original_image"] = add_original_image
 
             if "vibe" in option:
-                image, information_extracted, strength = option["vibe"]
-                params["reference_image"] = image_to_base64(resize_image(image, (width, height)))
-                params["reference_information_extracted"] = information_extracted
-                params["reference_strength"] = strength
+                params["reference_image_multiple"] = []
+                params["reference_information_extracted_multiple"] = []
+                params["reference_strength_multiple"] = []
+
+                for vibe in option["vibe"]:
+                    image, information_extracted, strength = vibe
+                    params["reference_image_multiple"].append(image_to_base64(resize_image(image, (width, height))))
+                    params["reference_information_extracted_multiple"].append(information_extracted)
+                    params["reference_strength_multiple"].append(strength)
 
             if "model" in option:
                 model = option["model"]
@@ -221,18 +252,28 @@ class GenerateNAID:
         if action == "infill" and model != "nai-diffusion-2":
             model = f"{model}-inpainting"
 
-        zipped_bytes = generate_image(self.access_token, positive, model, action, params)
-        zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
-        image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
 
-        ## save original png to comfy output dir
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
-        file = f"{filename}_{counter:05}_.png"
-        d = Path(full_output_folder)
-        d.mkdir(exist_ok=True)
-        (d / file).write_bytes(image_bytes)
+        timeout = option["timeout"] if "timeout" in option else None
+        image = blank_image()
+        try:
+            zipped_bytes = generate_image(self.access_token, positive, model, action, params, timeout)
+            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
+            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
 
-        image = bytes_to_image(image_bytes)
+            ## save original png to comfy output dir
+            full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
+            file = f"{filename}_{counter:05}_.png"
+            d = Path(full_output_folder)
+            d.mkdir(exist_ok=True)
+            (d / file).write_bytes(image_bytes)
+
+            image = bytes_to_image(image_bytes)
+        except Exception as e:
+            if "ignore_errors" in option and option["ignore_errors"]:
+                print("ignore error:", e)
+            else:
+                raise e
+
         return (image,)
 
 
@@ -242,6 +283,7 @@ NODE_CLASS_MAPPINGS = {
     "Img2ImgOptionNAID": Img2ImgOption,
     "InpaintingOptionNAID": InpaintingOption,
     "VibeTransferOptionNAID": VibeTransferOption,
+    "NetworkOptionNAID": NetworkOption,
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
 }
@@ -251,6 +293,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
+    "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
 }

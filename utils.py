@@ -31,9 +31,9 @@ def login(key) -> str:
     return response.json()["accessToken"]
 
 BASE_URL="https://image.novelai.net"
-def generate_image(access_token, prompt, model, action, parameters):
+def generate_image(access_token, prompt, model, action, parameters, timeout=None):
     data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
-    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" })
+    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
     response.raise_for_status()
     return response.content
 
@@ -61,6 +61,9 @@ def bytes_to_image(image_bytes):
     i = ImageOps.exif_transpose(i)
     image = np.array(i).astype(np.float32) / 255.0
     return torch.from_numpy(image)[None,]
+
+def blank_image():
+    return torch.tensor([[[0], [0], [0]]])
 
 def resize_image(image, size_to):
     samples = image.movedim(-1,1)
