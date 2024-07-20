@@ -10,6 +10,6 @@ Repository = "https://github.com/bedovyy/ComfyUI_NAIDGenerator"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "bedovyy"
 DisplayName = "ComfyUI_NAIDGenerator"
 Icon = ""
