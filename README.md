@@ -57,6 +57,12 @@ You can also relay Img2ImgOption on it.
 
 Note that width and height of the source images will be resized to generation size. **This will change aspect ratio of source images.**
 
+#### Multiple Vibe Transfer
+
+Just connect multiple `VibeTransferOptionNAID` nodes to `GenerateNAID` node.
+
+![preview_vibe_2](https://github.com/user-attachments/assets/2d56c0f7-bcd5-48ff-b436-012ea43604fe)
+
 ### ModelOption
 
 The default model of `GenerateNAID` node is `nai-diffusion-3`(NAI Diffusion Anime V3).
@@ -64,6 +70,16 @@ The default model of `GenerateNAID` node is `nai-diffusion-3`(NAI Diffusion Anim
 If you want to change model, put `ModelOptionNAID` node to `GenerateNAID` node.
 
 ![ModelOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/0b484edb-bcb5-428a-b2af-1372a9d7a34f)
+
+### NetworkOption
+
+You can set timeout or retry option from `NetworkOption` node.
+Moreover, you can ignore error by `ignore_errors`. In that case, the result will be 1x1 size grayscale image.
+Without this node, the request never retry and wait response forever, and stop the queue when error occurs
+
+![preview_network](https://github.com/user-attachments/assets/d82b0ff2-c57c-4870-9024-8d78261a8fea)
+
+**Note that if you set timeout too short, the you may spend Anlas even if you don't get image.** 
 
 ### PromptToNAID
 
