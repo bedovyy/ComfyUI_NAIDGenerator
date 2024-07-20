@@ -5,6 +5,7 @@ import base64
 import io
 import re
 import requests
+from requests.adapters import HTTPAdapter, Retry
 import comfy.utils
 
 import torch
@@ -31,9 +32,17 @@ def login(key) -> str:
     return response.json()["accessToken"]
 
 BASE_URL="https://image.novelai.net"
-def generate_image(access_token, prompt, model, action, parameters, timeout=None):
+def generate_image(access_token, prompt, model, action, parameters, timeout=None, retry=None):
     data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
-    response = requests.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
+
+    request = requests
+    if retry is not None and retry > 1:
+        retries = Retry(total=retry, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST"])
+        session = requests.Session()
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        request = session
+
+    response = request.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
     response.raise_for_status()
     return response.content
 
@@ -63,7 +72,7 @@ def bytes_to_image(image_bytes):
     return torch.from_numpy(image)[None,]
 
 def blank_image():
-    return torch.tensor([[[0], [0], [0]]])
+    return torch.tensor([[[0]]])
 
 def resize_image(image, size_to):
     samples = image.movedim(-1,1)

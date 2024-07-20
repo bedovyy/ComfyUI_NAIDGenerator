@@ -117,18 +117,20 @@ class NetworkOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "timeout_sec": ("INT", { "default": 300, "min": 30, "max": 3000, "step": 1, "display": "number" }),
                 "ignore_errors": ("BOOLEAN", { "default": True }),
+                "timeout_sec": ("INT", { "default": 120, "min": 30, "max": 3000, "step": 1, "display": "number" }),
+                "retry": ("INT", { "default": 3, "min": 1, "max": 100, "step": 1, "display": "number" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
     RETURN_TYPES = ("NAID_OPTION",)
     FUNCTION = "set_option"
     CATEGORY = "NovelAI"
-    def set_option(self, timeout_sec, ignore_errors, option=None):
+    def set_option(self, ignore_errors, timeout_sec, retry, option=None):
         option = option or {}
-        option["timeout"] = timeout_sec
         option["ignore_errors"] = ignore_errors
+        option["timeout"] = timeout_sec
+        option["retry"] = retry
         return (option,)
 
 
@@ -237,6 +239,9 @@ class GenerateNAID:
             if "model" in option:
                 model = option["model"]
 
+        timeout = option["timeout"] if option and "timeout" in option else None
+        retry = option["retry"] if option and "retry" in option else None
+
         if limit_opus_free:
             pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-3",) else 640*640
             if width * height > pixel_limit:
@@ -253,10 +258,9 @@ class GenerateNAID:
             model = f"{model}-inpainting"
 
 
-        timeout = option["timeout"] if "timeout" in option else None
         image = blank_image()
         try:
-            zipped_bytes = generate_image(self.access_token, positive, model, action, params, timeout)
+            zipped_bytes = generate_image(self.access_token, positive, model, action, params, timeout, retry)
             zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
             image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
 
