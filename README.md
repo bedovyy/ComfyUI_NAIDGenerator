@@ -79,7 +79,7 @@ Without this node, the request never retry and wait response forever, and stop t
 
 ![preview_network](https://github.com/user-attachments/assets/d82b0ff2-c57c-4870-9024-8d78261a8fea)
 
-**Note that if you set timeout too short, the you may spend Anlas even if you don't get image.** 
+**Note that if you set timeout too short, you may not get image but spend Anlas.** 
 
 ### PromptToNAID
 
