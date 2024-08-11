@@ -203,10 +203,13 @@ class GenerateNAID:
             "add_original_image": False,
             "cfg_rescale": cfg_rescale,
             "noise_schedule": scheduler,
-            "legacy_v3_extend": False,    #TODO: find what it is
+            "legacy_v3_extend": False,      #TODO: find what it is
             "uncond_scale": uncond_scale,
             "negative_prompt": negative,
-#            "extra_noise_seed": seed,    #TODO: find why it disappear
+            "reference_image_multiple": [], #NOTE: it is added on novelai webpage, even if ref.img not used
+            "reference_information_extracted_multiple": [],
+            "reference_strength_multiple": [],
+            "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
 #            "decrisper": False,
         }
         model = "nai-diffusion-3"
@@ -227,10 +230,6 @@ class GenerateNAID:
                 params["add_original_image"] = add_original_image
 
             if "vibe" in option:
-                params["reference_image_multiple"] = []
-                params["reference_information_extracted_multiple"] = []
-                params["reference_strength_multiple"] = []
-
                 for vibe in option["vibe"]:
                     image, information_extracted, strength = vibe
                     params["reference_image_multiple"].append(image_to_base64(resize_image(image, (width, height))))
