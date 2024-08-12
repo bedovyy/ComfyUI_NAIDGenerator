@@ -89,4 +89,14 @@ Optionally, you can choose weight per brace. If you set `weight_per_brace` to 0.
 
 ![image](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/25c48350-7268-4d6f-81fe-9eb080fc6e5a)
 
+### Director Tools
+
+![image](https://github.com/user-attachments/assets/e205a51e-59dc-4d5a-94c8-29715ed98739)
+
+You can find director tools like `LineArtNAID` or `EmotionNAID` on NovelAI > director_tools.
+
+![augment_example](https://github.com/user-attachments/assets/5833e9fb-f92e-4d53-9069-58ca8503a3e7)
+
+
+
 
