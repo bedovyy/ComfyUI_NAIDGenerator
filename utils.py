@@ -68,9 +68,10 @@ def generate_image(access_token, prompt, model, action, parameters, timeout=None
     response.raise_for_status()
     return response.content
 
-def augment_image(access_token, req_type, width, height, image, timeout=None, retry=None, options={}):
+def augment_image(access_token, req_type, width, height, image, options={}, timeout=None, retry=None):
     data = { "req_type": req_type, "width": width, "height": height, "image": image }
-    data.update(options)
+    if options:
+        data.update(options)
 
     request = requests
     if retry is not None and retry > 1:
@@ -102,9 +103,11 @@ def naimask_to_base64(image):
     img.save(image_bytesIO, format="png")
     return base64.b64encode(image_bytesIO.getvalue()).decode()
 
-def bytes_to_image(image_bytes):
+def bytes_to_image(image_bytes, keep_alpha=True):
     i = Image.open(io.BytesIO(image_bytes))
     i = ImageOps.exif_transpose(i)
+    if not keep_alpha:
+        i = i.convert("RGB")
     image = np.array(i).astype(np.float32) / 255.0
     return torch.from_numpy(image)[None,]
 

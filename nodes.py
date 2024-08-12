@@ -264,12 +264,40 @@ class GenerateNAID:
         return (image,)
 
 
-#TODO: refactoring Augments or make them one node
-class LineArtAugment:
+def base_augment(access_token, output_dir, limit_opus_free, ignore_errors, req_type, image, options=None):
+    image = image.movedim(-1, 1)
+    w, h = (image.shape[3], image.shape[2])
+    image = image.movedim(1, -1)
+
+    if w * h > 1024 * 1024:
+        w, h = calculate_resolution(pixel_limit, (w, h))
+    base64_image = image_to_base64(resize_image(image, (w, h)))
+    result_image = blank_image()
+    try:
+        zipped_bytes = augment_image(access_token, req_type, w, h, base64_image, options=options)
+        zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
+        image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+
+        ## save original png to comfy output dir
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", output_dir)
+        file = f"{filename}_{counter:05}_.png"
+        d = Path(full_output_folder)
+        d.mkdir(exist_ok=True)
+        (d / file).write_bytes(image_bytes)
+
+        result_image = bytes_to_image(image_bytes)
+    except Exception as e:
+        if ignore_errors:
+            print("ignore error:", e)
+        else:
+            raise e
+
+    return (result_image,)
+
+class RemoveBGAugment:
     def __init__(self):
         self.access_token = get_access_token()
         self.output_dir = folder_paths.get_output_directory()
-
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -279,45 +307,54 @@ class LineArtAugment:
                 "ignore_errors": ("BOOLEAN", { "default": False }),
             },
         }
-
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "augment"
     CATEGORY = "NovelAI/director_tools"
     def augment(self, image, limit_opus_free, ignore_errors):
-        image = image.movedim(-1, 1)
-        w, h = (image.shape[3], image.shape[2])
-        image = image.movedim(1, -1)
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "bg-removal", image) 
 
-        if w * h > 1024 * 1024:
-            w, h = calculate_resolution(pixel_limit, (w, h))
-        base64_image = image_to_base64(resize_image(image, (w, h)))
-        result_image = blank_image()
-        try:
-            zipped_bytes = augment_image(self.access_token, "lineart", w, h, base64_image)
-            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
-            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+class LineArtAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+            },
+        }
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors):
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "lineart", image)
 
-            ## save original png to comfy output dir
-            full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
-            file = f"{filename}_{counter:05}_.png"
-            d = Path(full_output_folder)
-            d.mkdir(exist_ok=True)
-            (d / file).write_bytes(image_bytes)
-
-            result_image = bytes_to_image(image_bytes)
-        except Exception as e:
-            if ignore_errors:
-                print("ignore error:", e)
-            else:
-                raise e
-
-        return (result_image,)
+class SketchAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+            },
+        }
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors):
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "sketch", image)
 
 class ColorizeAugment:
     def __init__(self):
         self.access_token = get_access_token()
         self.output_dir = folder_paths.get_output_directory()
-
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -329,39 +366,60 @@ class ColorizeAugment:
                 "prompt": ("STRING", { "default": "", "multiline": True, "dynamicPrompts": False }),
             },
         }
-
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "augment"
     CATEGORY = "NovelAI/director_tools"
     def augment(self, image, limit_opus_free, ignore_errors, defry, prompt):
-        image = image.movedim(-1, 1)
-        w, h = (image.shape[3], image.shape[2])
-        image = image.movedim(1, -1)
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "colorize", image, options={ "defry": defry, "prompt": prompt })
 
-        if w * h > 1024 * 1024:
-            w, h = calculate_resolution(pixel_limit, (w, h))
-        base64_image = image_to_base64(resize_image(image, (w, h)))
-        result_image = blank_image()
-        try:
-            zipped_bytes = augment_image(self.access_token, "colorize", w, h, base64_image, options={ "defry": defry, "prompt": prompt })
-            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
-            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+class EmotionAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
 
-            ## save original png to comfy output dir
-            full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
-            file = f"{filename}_{counter:05}_.png"
-            d = Path(full_output_folder)
-            d.mkdir(exist_ok=True)
-            (d / file).write_bytes(image_bytes)
+    strength_list = ["normal", "slightly_weak", "weak", "even_weaker", "very_weak", "weakest"]
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+                "mood": (["neutral", "happy", "sad", "angry", "scared",
+                     "surprised", "tired", "excited", "nervous", "thinking",
+                     "confused", "shy", "disgusted", "smug", "bored",
+                     "laughing", "irritated", "aroused", "embarrassed", "worried",
+                     "love", "determined", "hurt", "playful"], { "default": "neutral" }),
+                "strength": (s.strength_list, { "default": "normal" }),
+                "prompt": ("STRING", { "default": "", "multiline": True, "dynamicPrompts": False }),
+            },
+        }
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors, mood, strength, prompt):
+        prompt = f"{mood};;{prompt}"
+        defry = EmotionAugment.strength_list.index(strength)
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "emotion", image, options={ "defry": defry, "prompt": prompt })
 
-            result_image = bytes_to_image(image_bytes)
-        except Exception as e:
-            if ignore_errors:
-                print("ignore error:", e)
-            else:
-                raise e
-
-        return (result_image,)
+class DeclutterAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+            },
+        }
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors):
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "declutter", image)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -373,8 +431,12 @@ NODE_CLASS_MAPPINGS = {
     "NetworkOptionNAID": NetworkOption,
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
+    "RemoveBGNAID": RemoveBGAugment,
     "LineArtNAID": LineArtAugment,
+    "SketchNAID": SketchAugment,
     "ColorizeNAID": ColorizeAugment,
+    "EmotionNAID": EmotionAugment,
+    "DeclutterNAID": DeclutterAugment,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
@@ -385,6 +447,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
+    "RemoveBGNAID": "Remove BG ✒️🅝🅐🅘",
     "LineArtNAID": "LineArt ✒️🅝🅐🅘",
+    "SketchNAID": "SketchNAID ✒️🅝🅐🅘",
     "ColorizeNAID": "Colorize ✒️🅝🅐🅘",
+    "EmotionNAID": "Emotion ✒️🅝🅐🅘",
+    "DeclutterNAID": "Declutter ✒️🅝🅐🅘",
 }
