@@ -2,6 +2,8 @@ from hashlib import blake2b
 import argon2
 
 import base64
+import dotenv
+from os import environ as env
 import io
 import re
 import requests
@@ -31,6 +33,26 @@ def login(key) -> str:
     response.raise_for_status()
     return response.json()["accessToken"]
 
+def get_access_token():
+    dotenv.load_dotenv()
+    if "NAI_ACCESS_TOKEN" in env:
+        access_token = env["NAI_ACCESS_TOKEN"]
+    elif "NAI_ACCESS_KEY" in env:
+        print("ComfyUI_NAIDGenerator: NAI_ACCESS_KEY is deprecated. use NAI_ACCESS_TOKEN instead.")
+        access_key = env["NAI_ACCESS_KEY"]
+    elif "NAI_USERNAME" in env and "NAI_PASSWORD" in env:
+        print("ComfyUI_NAIDGenerator: NAI_USERNAME is deprecated. use NAI_ACCESS_TOKEN instead.")
+        username = env["NAI_USERNAME"]
+        password = env["NAI_PASSWORD"]
+        access_key = get_access_key(username, password)
+    else:
+        raise RuntimeError("Please ensure that NAI_API_TOKEN is set in ComfyUI/.env file.")
+
+    if not access_token:
+        access_token = login(access_key)
+    return access_token
+
+
 BASE_URL="https://image.novelai.net"
 def generate_image(access_token, prompt, model, action, parameters, timeout=None, retry=None):
     data = { "input": prompt, "model": model, "action": action, "parameters": parameters }
@@ -43,6 +65,21 @@ def generate_image(access_token, prompt, model, action, parameters, timeout=None
         request = session
 
     response = request.post(f"{BASE_URL}/ai/generate-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
+    response.raise_for_status()
+    return response.content
+
+def augment_image(access_token, req_type, width, height, image, timeout=None, retry=None, options={}):
+    data = { "req_type": req_type, "width": width, "height": height, "image": image }
+    data.update(options)
+
+    request = requests
+    if retry is not None and retry > 1:
+        retries = Retry(total=retry, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST"])
+        session = requests.Session()
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        request = session
+
+    response = request.post(f"{BASE_URL}/ai/augment-image", json=data, headers={ "Authorization": f"Bearer {access_token}" }, timeout=timeout)
     response.raise_for_status()
     return response.content
 

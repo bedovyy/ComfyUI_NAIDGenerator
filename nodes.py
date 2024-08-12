@@ -1,6 +1,4 @@
 import copy
-import dotenv
-from os import environ as env
 import io
 from pathlib import Path
 import folder_paths
@@ -137,22 +135,7 @@ class NetworkOption:
 
 class GenerateNAID:
     def __init__(self):
-        dotenv.load_dotenv()
-        if "NAI_ACCESS_TOKEN" in env:
-            self.access_token = env["NAI_ACCESS_TOKEN"]
-        elif "NAI_ACCESS_KEY" in env:
-            print("ComfyUI_NAIDGenerator: NAI_ACCESS_KEY is deprecated. use NAI_ACCESS_TOKEN instead.")
-            access_key = env["NAI_ACCESS_KEY"]
-        elif "NAI_USERNAME" in env and "NAI_PASSWORD" in env:
-            print("ComfyUI_NAIDGenerator: NAI_USERNAME is deprecated. use NAI_ACCESS_TOKEN instead.")
-            username = env["NAI_USERNAME"]
-            password = env["NAI_PASSWORD"]
-            access_key = get_access_key(username, password)
-        else:
-            raise RuntimeError("Please ensure that NAI_API_TOKEN is set in ComfyUI/.env file.")
-
-        if not hasattr(self, "access_token"):
-            self.access_token = login(access_key)
+        self.access_token = get_access_token()
         self.output_dir = folder_paths.get_output_directory()
 
     @classmethod
@@ -281,6 +264,106 @@ class GenerateNAID:
         return (image,)
 
 
+#TODO: refactoring Augments or make them one node
+class LineArtAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors):
+        image = image.movedim(-1, 1)
+        w, h = (image.shape[3], image.shape[2])
+        image = image.movedim(1, -1)
+
+        if w * h > 1024 * 1024:
+            w, h = calculate_resolution(pixel_limit, (w, h))
+        base64_image = image_to_base64(resize_image(image, (w, h)))
+        result_image = blank_image()
+        try:
+            zipped_bytes = augment_image(self.access_token, "lineart", w, h, base64_image)
+            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
+            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+
+            ## save original png to comfy output dir
+            full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
+            file = f"{filename}_{counter:05}_.png"
+            d = Path(full_output_folder)
+            d.mkdir(exist_ok=True)
+            (d / file).write_bytes(image_bytes)
+
+            result_image = bytes_to_image(image_bytes)
+        except Exception as e:
+            if ignore_errors:
+                print("ignore error:", e)
+            else:
+                raise e
+
+        return (result_image,)
+
+class ColorizeAugment:
+    def __init__(self):
+        self.access_token = get_access_token()
+        self.output_dir = folder_paths.get_output_directory()
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "ignore_errors": ("BOOLEAN", { "default": False }),
+                "defry": ("INT", { "default": 0, "min": 0, "max": 5, "step": 1, "display": "number" }),
+                "prompt": ("STRING", { "default": "", "multiline": True, "dynamicPrompts": False }),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "augment"
+    CATEGORY = "NovelAI/director_tools"
+    def augment(self, image, limit_opus_free, ignore_errors, defry, prompt):
+        image = image.movedim(-1, 1)
+        w, h = (image.shape[3], image.shape[2])
+        image = image.movedim(1, -1)
+
+        if w * h > 1024 * 1024:
+            w, h = calculate_resolution(pixel_limit, (w, h))
+        base64_image = image_to_base64(resize_image(image, (w, h)))
+        result_image = blank_image()
+        try:
+            zipped_bytes = augment_image(self.access_token, "colorize", w, h, base64_image, options={ "defry": defry, "prompt": prompt })
+            zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
+            image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
+
+            ## save original png to comfy output dir
+            full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path("NAI_autosave", self.output_dir)
+            file = f"{filename}_{counter:05}_.png"
+            d = Path(full_output_folder)
+            d.mkdir(exist_ok=True)
+            (d / file).write_bytes(image_bytes)
+
+            result_image = bytes_to_image(image_bytes)
+        except Exception as e:
+            if ignore_errors:
+                print("ignore error:", e)
+            else:
+                raise e
+
+        return (result_image,)
+
+
 NODE_CLASS_MAPPINGS = {
     "GenerateNAID": GenerateNAID,
     "ModelOptionNAID": ModelOption,
@@ -290,6 +373,8 @@ NODE_CLASS_MAPPINGS = {
     "NetworkOptionNAID": NetworkOption,
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
+    "LineArtNAID": LineArtAugment,
+    "ColorizeNAID": ColorizeAugment,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
@@ -300,4 +385,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
+    "LineArtNAID": "LineArt ✒️🅝🅐🅘",
+    "ColorizeNAID": "Colorize ✒️🅝🅐🅘",
 }
