@@ -38,7 +38,7 @@ class ModelOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-3"], { "default": "nai-diffusion-3" }),
+                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3"], { "default": "nai-diffusion-3" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -226,7 +226,7 @@ class GenerateNAID:
         retry = option["retry"] if option and "retry" in option else None
 
         if limit_opus_free:
-            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-3",) else 640*640
+            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3",) else 640*640
             if width * height > pixel_limit:
                 max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
