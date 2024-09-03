@@ -151,7 +151,7 @@ class GenerateNAID:
                 "cfg": ("FLOAT", { "default": 5.0, "min": 0.0, "max": 10.0, "step": 0.1, "display": "number" }),
                 "decrisper": ("BOOLEAN", { "default": False }),
                 "smea": (["none", "SMEA", "SMEA+DYN"], { "default": "none" }),
-                "sampler": (["k_euler", "k_euler_ancestral", "k_dpmpp_2s_ancestral", "k_dpmpp_2m", "k_dpmpp_sde", "ddim"], { "default": "k_euler" }),
+                "sampler": (["k_euler", "k_euler_ancestral", "k_dpmpp_2s_ancestral", "k_dpmpp_2m_sde", "k_dpmpp_2m", "k_dpmpp_sde", "ddim"], { "default": "k_euler" }),
                 "scheduler": (["native", "karras", "exponential", "polyexponential"], { "default": "native" }),
                 "seed": ("INT", { "default": 0, "min": 0, "max": 9999999999, "step": 1, "display": "number" }),
                 "uncond_scale": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.5, "step": 0.05, "display": "number" }),
@@ -194,7 +194,6 @@ class GenerateNAID:
             "reference_information_extracted_multiple": [],
             "reference_strength_multiple": [],
             "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
-#            "decrisper": False,
         }
         model = "nai-diffusion-3"
         action = "generate"
