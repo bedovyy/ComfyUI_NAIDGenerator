@@ -6,6 +6,8 @@ import zipfile
 
 from .utils import *
 
+TOOLTIP_LIMIT_OPUS_FREE = "Limit image size and steps for free generation by Opus."
+
 class PromptToNAID:
     @classmethod
     def INPUT_TYPES(s):
@@ -142,7 +144,7 @@ class GenerateNAID:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "width": ("INT", { "default": 832, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "height": ("INT", { "default": 1216, "min": 64, "max": 1600, "step": 64, "display": "number" }),
                 "positive": ("STRING", { "default": ", best quality, amazing quality, very aesthetic, absurdres", "multiline": True, "dynamicPrompts": False }),
@@ -269,8 +271,10 @@ def base_augment(access_token, output_dir, limit_opus_free, ignore_errors, req_t
     w, h = (image.shape[3], image.shape[2])
     image = image.movedim(1, -1)
 
-    if w * h > 1024 * 1024:
-        w, h = calculate_resolution(pixel_limit, (w, h))
+    if limit_opus_free:
+        pixel_limit = 1024 * 1024
+        if w * h > pixel_limit:
+            w, h = calculate_resolution(pixel_limit, (w, h))
     base64_image = image_to_base64(resize_image(image, (w, h)))
     result_image = blank_image()
     try:
@@ -303,7 +307,7 @@ class RemoveBGAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
             },
         }
@@ -322,7 +326,7 @@ class LineArtAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
             },
         }
@@ -341,7 +345,7 @@ class SketchAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
             },
         }
@@ -360,7 +364,7 @@ class ColorizeAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
                 "defry": ("INT", { "default": 0, "min": 0, "max": 5, "step": 1, "display": "number" }),
                 "prompt": ("STRING", { "default": "", "multiline": True, "dynamicPrompts": False }),
@@ -383,7 +387,7 @@ class EmotionAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
                 "mood": (["neutral", "happy", "sad", "angry", "scared",
                      "surprised", "tired", "excited", "nervous", "thinking",
@@ -411,7 +415,7 @@ class DeclutterAugment:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "limit_opus_free": ("BOOLEAN", { "default": True }),
+                "limit_opus_free": ("BOOLEAN", { "default": True, "tooltip": TOOLTIP_LIMIT_OPUS_FREE }),
                 "ignore_errors": ("BOOLEAN", { "default": False }),
             },
         }
@@ -449,7 +453,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
     "RemoveBGNAID": "Remove BG ✒️🅝🅐🅘",
     "LineArtNAID": "LineArt ✒️🅝🅐🅘",
-    "SketchNAID": "SketchNAID ✒️🅝🅐🅘",
+    "SketchNAID": "Sketch ✒️🅝🅐🅘",
     "ColorizeNAID": "Colorize ✒️🅝🅐🅘",
     "EmotionNAID": "Emotion ✒️🅝🅐🅘",
     "DeclutterNAID": "Declutter ✒️🅝🅐🅘",
