@@ -1,7 +1,7 @@
 [project]
 name = "comfyui_naidgenerator"
 description = "This extension helps generate images through NAI."
-version = "1.0.5"
+version = "1.0.6"
 license = { file = "LICENSE" }
 dependencies = ["python-dotenv", "argon2-cffi"]
 

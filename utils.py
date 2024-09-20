@@ -138,6 +138,10 @@ def calculate_resolution(pixel_count, aspect_ratio):
     height = int(np.floor(k * h / w) * 64)
     return width, height
 
+def calculate_skip_cfg_above_sigma(w, h):
+    # 832 * 1216
+    return (w * h / 1011712) ** 0.5 * 19
+
 
 def prompt_to_stack(sentence):
     result = []

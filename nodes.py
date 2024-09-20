@@ -151,6 +151,7 @@ class GenerateNAID:
                 "negative": ("STRING", { "default": "lowres", "multiline": True, "dynamicPrompts": False }),
                 "steps": ("INT", { "default": 28, "min": 0, "max": 50, "step": 1, "display": "number" }),
                 "cfg": ("FLOAT", { "default": 5.0, "min": 0.0, "max": 10.0, "step": 0.1, "display": "number" }),
+                "variety" : ("BOOLEAN", { "default": False }),
                 "decrisper": ("BOOLEAN", { "default": False }),
                 "smea": (["none", "SMEA", "SMEA+DYN"], { "default": "none" }),
                 "sampler": (["k_euler", "k_euler_ancestral", "k_dpmpp_2s_ancestral", "k_dpmpp_2m_sde", "k_dpmpp_2m", "k_dpmpp_sde", "ddim"], { "default": "k_euler" }),
@@ -166,7 +167,7 @@ class GenerateNAID:
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
 
-    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, decrisper, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, decrisper, variety, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
         width, height = calculate_resolution(width*height, (width, height))
 
         # ref. novelai_api.ImagePreset
@@ -184,6 +185,7 @@ class GenerateNAID:
             "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
             "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
             "dynamic_thresholding": decrisper,
+            "skip_cfg_above_sigma": None,
             "controlnet_strength": 1.0,
             "legacy": False,
             "add_original_image": False,
@@ -235,6 +237,9 @@ class GenerateNAID:
                 params["height"] = max_height
             if steps > 28:
                 params["steps"] = 28
+
+        if variety:
+            params["skip_cfg_above_sigma"] = calculate_skip_cfg_above_sigma(params["width"], params["height"])
 
         if sampler == "ddim" and model == "nai-diffusion-3":
             params["sampler"] = "ddim_v3"
