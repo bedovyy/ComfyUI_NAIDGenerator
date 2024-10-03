@@ -45,6 +45,24 @@ Note that both source image and mask will be resized fit to generation size.
 
 (You don't need `MaskImageToNAID` node to convert mask image to NAID mask image.)
 
+### Vibe Transfer
+
+Connect `VibeTransferOptionNAID` node to `GenerateNAID` node and put reference image.
+
+![Comfy_workflow](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/8c6c1c2e-f29d-42a1-b615-439155cb3164)
+
+You can also relay Img2ImgOption on it.
+
+![image](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/acf0496c-8c7c-48f4-9530-18e6a23669d5)
+
+Note that width and height of the source images will be resized to generation size. **This will change aspect ratio of source images.**
+
+#### Multiple Vibe Transfer
+
+Just connect multiple `VibeTransferOptionNAID` nodes to `GenerateNAID` node.
+
+![preview_vibe_2](https://github.com/user-attachments/assets/2d56c0f7-bcd5-48ff-b436-012ea43604fe)
+
 ### ModelOption
 
 The default model of `GenerateNAID` node is `nai-diffusion-3`(NAI Diffusion Anime V3).
@@ -53,6 +71,16 @@ If you want to change model, put `ModelOptionNAID` node to `GenerateNAID` node.
 
 ![ModelOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/0b484edb-bcb5-428a-b2af-1372a9d7a34f)
 
+### NetworkOption
+
+You can set timeout or retry option from `NetworkOption` node.
+Moreover, you can ignore error by `ignore_errors`. In that case, the result will be 1x1 size grayscale image.
+Without this node, the request never retry and wait response forever, and stop the queue when error occurs
+
+![preview_network](https://github.com/user-attachments/assets/d82b0ff2-c57c-4870-9024-8d78261a8fea)
+
+**Note that if you set timeout too short, you may not get image but spend Anlas.** 
+
 ### PromptToNAID
 
 ComfyUI use `()` or `(word:weight)` for emphasis, but NovelAI use `{}` and `[]`. This node convert ComfyUI's prompt to NovelAI's.
@@ -60,5 +88,15 @@ ComfyUI use `()` or `(word:weight)` for emphasis, but NovelAI use `{}` and `[]`.
 Optionally, you can choose weight per brace. If you set `weight_per_brace` to 0.10, `(word:1.1)` will convert to `{word}` instead of `{{word}}`.
 
 ![image](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/25c48350-7268-4d6f-81fe-9eb080fc6e5a)
+
+### Director Tools
+
+![image](https://github.com/user-attachments/assets/e205a51e-59dc-4d5a-94c8-29715ed98739)
+
+You can find director tools like `LineArtNAID` or `EmotionNAID` on NovelAI > director_tools.
+
+![augment_example](https://github.com/user-attachments/assets/5833e9fb-f92e-4d53-9069-58ca8503a3e7)
+
+
 
 
