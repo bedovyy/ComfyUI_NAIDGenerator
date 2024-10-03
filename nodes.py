@@ -159,6 +159,7 @@ class GenerateNAID:
                 "seed": ("INT", { "default": 0, "min": 0, "max": 9999999999, "step": 1, "display": "number" }),
                 "uncond_scale": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.5, "step": 0.05, "display": "number" }),
                 "cfg_rescale": ("FLOAT", { "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.02, "display": "number" }),
+                "keep_alpha": ("BOOLEAN", { "default": True, "tooltip": "Disable to further process output images locally" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -167,7 +168,7 @@ class GenerateNAID:
     FUNCTION = "generate"
     CATEGORY = "NovelAI"
 
-    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, decrisper, variety, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, option=None):
+    def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, decrisper, variety, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, keep_alpha, option=None):
         width, height = calculate_resolution(width*height, (width, height))
 
         # ref. novelai_api.ImagePreset
@@ -261,7 +262,7 @@ class GenerateNAID:
             d.mkdir(exist_ok=True)
             (d / file).write_bytes(image_bytes)
 
-            image = bytes_to_image(image_bytes)
+            image = bytes_to_image(image_bytes, keep_alpha)
         except Exception as e:
             if "ignore_errors" in option and option["ignore_errors"]:
                 print("ignore error:", e)
@@ -294,7 +295,7 @@ def base_augment(access_token, output_dir, limit_opus_free, ignore_errors, req_t
         d.mkdir(exist_ok=True)
         (d / file).write_bytes(image_bytes)
 
-        result_image = bytes_to_image(image_bytes)
+        result_image = bytes_to_image(image_bytes, keep_alpha)
     except Exception as e:
         if ignore_errors:
             print("ignore error:", e)
