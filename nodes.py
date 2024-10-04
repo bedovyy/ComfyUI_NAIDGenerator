@@ -295,7 +295,7 @@ def base_augment(access_token, output_dir, limit_opus_free, ignore_errors, req_t
         d.mkdir(exist_ok=True)
         (d / file).write_bytes(image_bytes)
 
-        result_image = bytes_to_image(image_bytes, keep_alpha)
+        result_image = bytes_to_image(image_bytes)
     except Exception as e:
         if ignore_errors:
             print("ignore error:", e)
