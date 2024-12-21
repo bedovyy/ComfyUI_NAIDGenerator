@@ -40,7 +40,7 @@ class ModelOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3"], { "default": "nai-diffusion-3" }),
+                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview"], { "default": "nai-diffusion-4-curated-preview" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -181,8 +181,8 @@ class GenerateNAID:
             "steps": steps,
             "seed": seed,
             "n_samples": 1,
-            "ucPreset": 3,            #TODO: do I have to change it even if tags already typed by user?
-            "qualityToggle": False,   #TODO: do I have to change it even if tags already typed by user?
+            "ucPreset": 3,
+            "qualityToggle": False,
             "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
             "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
             "dynamic_thresholding": decrisper,
@@ -192,15 +192,32 @@ class GenerateNAID:
             "add_original_image": False,
             "cfg_rescale": cfg_rescale,
             "noise_schedule": scheduler,
-            "legacy_v3_extend": False,      #TODO: find what it is
+            "legacy_v3_extend": False,
             "uncond_scale": uncond_scale,
             "negative_prompt": negative,
-            "reference_image_multiple": [], #NOTE: it is added on novelai webpage, even if ref.img not used
+            "prompt": positive,
+            "reference_image_multiple": [],
             "reference_information_extracted_multiple": [],
             "reference_strength_multiple": [],
-            "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
+            "extra_noise_seed": seed,
+            "v4_prompt": {
+                "use_coords": False,
+                "use_order": False,
+                "caption": {
+                    "base_caption": positive,
+                    "char_captions": []
+                }
+            },
+            "v4_negative_prompt": {
+                "use_coords": False,
+                "use_order": False,
+                "caption": {
+                    "base_caption": negative,
+                    "char_captions": []
+                }
+            }
         }
-        model = "nai-diffusion-3"
+        model = "nai-diffusion-4-curated-preview"
         action = "generate"
 
         if option:
@@ -227,11 +244,15 @@ class GenerateNAID:
             if "model" in option:
                 model = option["model"]
 
+            # Handle V4 options
+            if "v4_prompt" in option:
+                params["v4_prompt"].update(option["v4_prompt"])
+
         timeout = option["timeout"] if option and "timeout" in option else None
         retry = option["retry"] if option and "retry" in option else None
 
         if limit_opus_free:
-            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3",) else 640*640
+            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4", "nai-diffusion-4-curated-preview") else 640*640
             if width * height > pixel_limit:
                 max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
@@ -242,12 +263,11 @@ class GenerateNAID:
         if variety:
             params["skip_cfg_above_sigma"] = calculate_skip_cfg_above_sigma(params["width"], params["height"])
 
-        if sampler == "ddim" and model == "nai-diffusion-3":
+        if sampler == "ddim" and model in ("nai-diffusion-3", "nai-diffusion-4", "nai-diffusion-4-curated-preview"):
             params["sampler"] = "ddim_v3"
 
         if action == "infill" and model != "nai-diffusion-2":
             model = f"{model}-inpainting"
-
 
         image = blank_image()
         try:
@@ -284,6 +304,21 @@ def base_augment(access_token, output_dir, limit_opus_free, ignore_errors, req_t
     base64_image = image_to_base64(resize_image(image, (w, h)))
     result_image = blank_image()
     try:
+        # Build request based on NAI v4 API spec
+        request = {
+            "image": base64_image,
+            "req_type": req_type,
+            "width": w,
+            "height": h
+        }
+
+        # Add optional parameters if provided
+        if options:
+            if "defry" in options:
+                request["defry"] = options["defry"]
+            if "prompt" in options:
+                request["prompt"] = options["prompt"]
+
         zipped_bytes = augment_image(access_token, req_type, w, h, base64_image, options=options)
         zipped = zipfile.ZipFile(io.BytesIO(zipped_bytes))
         image_bytes = zipped.read(zipped.infolist()[0]) # only support one n_samples
@@ -321,7 +356,7 @@ class RemoveBGAugment:
     FUNCTION = "augment"
     CATEGORY = "NovelAI/director_tools"
     def augment(self, image, limit_opus_free, ignore_errors):
-        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "bg-removal", image) 
+        return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "bg-removal", image)
 
 class LineArtAugment:
     def __init__(self):
@@ -430,6 +465,90 @@ class DeclutterAugment:
     CATEGORY = "NovelAI/director_tools"
     def augment(self, image, limit_opus_free, ignore_errors):
         return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "declutter", image)
+class V4BasePrompt:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "base_caption": ("STRING", { "multiline": True }),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)  # Changed from NAID_OPTION to STRING
+    FUNCTION = "convert"        # Changed from set_option to convert
+    CATEGORY = "NovelAI/v4"
+    def convert(self, base_caption):
+        return (base_caption,)  # Simply returns the caption as a string
+
+"""class V4PromptConfig:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "use_coords": ("BOOLEAN", { "default": False }),
+                "use_order": ("BOOLEAN", { "default": False }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI/v4"
+    def set_option(self, use_coords, use_order, option=None):
+        option = copy.deepcopy(option) if option else {}
+        if "v4_prompt" not in option:
+            option["v4_prompt"] = {}
+        option["v4_prompt"]["use_coords"] = use_coords
+        option["v4_prompt"]["use_order"] = use_order
+        return (option,)
+
+class V4CharacterCaption:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "char_caption": ("STRING", { "multiline": True }),
+                "x": ("FLOAT", { "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01 }),
+                "y": ("FLOAT", { "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01 }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI/v4"
+    def set_option(self, char_caption, x, y, option=None):
+        option = copy.deepcopy(option) if option else {}
+        if "v4_prompt" not in option:
+            option["v4_prompt"] = {
+                "caption": {
+                    "base_caption": "",
+                    "char_captions": []
+                }
+            }
+        
+        char_caption_obj = {
+            "char_caption": char_caption,
+            "centers": [{"x": x, "y": y}]
+        }
+        
+        option["v4_prompt"]["caption"]["char_captions"].append(char_caption_obj)
+        return (option,)
+"""
+class V4NegativePrompt:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "negative_caption": ("STRING", { "multiline": True }),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "convert"
+    CATEGORY = "NovelAI/v4"
+    def convert(self, negative_caption):
+        return (negative_caption,)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -447,7 +566,10 @@ NODE_CLASS_MAPPINGS = {
     "ColorizeNAID": ColorizeAugment,
     "EmotionNAID": EmotionAugment,
     "DeclutterNAID": DeclutterAugment,
+    "V4BasePrompt": V4BasePrompt,
+    "V4NegativePrompt": V4NegativePrompt,
 }
+
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
     "ModelOptionNAID": "ModelOption ✒️🅝🅐🅘",
@@ -463,4 +585,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ColorizeNAID": "Colorize ✒️🅝🅐🅘",
     "EmotionNAID": "Emotion ✒️🅝🅐🅘",
     "DeclutterNAID": "Declutter ✒️🅝🅐🅘",
+    "V4BasePrompt": "V4 Base Prompt ✒️🅝🅐🅘",
+    "V4NegativePrompt": "V4 Negative Prompt ✒️🅝🅐🅘",
 }
