@@ -1,12 +1,16 @@
 # ComfyUI_NAIDGenerator
+
 A [ComfyUI](https://github.com/comfyanonymous/ComfyUI) extension for generating image via NovelAI API.
 
 ## Installation
+
 - `git clone https://github.com/bedovyy/ComfyUI_NAIDGenerator` into the `custom_nodes` directory.
 - or 'Install via Git URL' from [Comfyui Manager](https://github.com/ltdrdata/ComfyUI-Manager)
 
 ## Setting up NAI account
+
 Before using the nodes, you should set NAI_ACCESS_TOKEN on `ComfyUI/.env` file.
+
 ```
 NAI_ACCESS_TOKEN=<ACCESS_TOKEN>
 ```
@@ -16,11 +20,13 @@ You can get persistent API token by **User Settings > Account > Get Persistent A
 Otherwise, you can get access token which is valid for 30 days using [novelai-api](https://github.com/Aedial/novelai-api).
 
 ## Usage
+
 The nodes are located at `NovelAI` category.
 
 ![image](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/8ab1ecc0-2ba8-4e38-8810-727e50a20923)
 
 ### Txt2img
+
 Simply connect `GenerateNAID` node and `SaveImage` node.
 
 ![generate](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/1328896d-7d4b-4d47-8ec2-d1c4e8e2561c)
@@ -79,7 +85,7 @@ Without this node, the request never retry and wait response forever, and stop t
 
 ![preview_network](https://github.com/user-attachments/assets/d82b0ff2-c57c-4870-9024-8d78261a8fea)
 
-**Note that if you set timeout too short, you may not get image but spend Anlas.** 
+**Note that if you set timeout too short, you may not get image but spend Anlas.**
 
 ### PromptToNAID
 
@@ -97,6 +103,67 @@ You can find director tools like `LineArtNAID` or `EmotionNAID` on NovelAI > dir
 
 ![augment_example](https://github.com/user-attachments/assets/5833e9fb-f92e-4d53-9069-58ca8503a3e7)
 
+### V4 Support (Preview)
 
+The node now supports NAI's V4 architecture through the nai-diffusion-4-curated-preview model. This is a preview release of V4 with some limitations:
 
+- **Important Notes:**
+  - This is a preview version of V4 and some features are limited
+  - Inpainting will automatically use V3 model (but works with V4-generated images)
+  - Vibe transfer is not yet supported with V4 preview (will be available with full V4 release)
+  - Full V4 feature support will come with the official V4 release
 
+#### New Model Option
+
+NAI Diffusion V4 Curated Preview is now available in the ModelOptionNAID node:
+
+```python
+model = "nai-diffusion-4-curated-preview"
+```
+
+#### V4 Prompt Handling
+
+Two new nodes have been added for V4 prompt handling:
+
+##### V4BasePrompt
+
+A node for handling V4 positive prompts:
+
+```
+V4BasePrompt -----> positive
+               GenerateNAID
+```
+
+##### V4NegativePrompt
+
+A node for handling V4 negative prompts:
+
+```
+V4NegativePrompt -> negative
+                 GenerateNAID
+```
+
+#### Example V4 Workflow
+
+Here's a basic V4 setup:
+
+```
+V4BasePrompt -----> positive
+V4NegativePrompt -> negative  GenerateNAID
+ModelOption ------> option
+```
+
+#### Work In Progress Features
+
+The following V4 features are currently in development:
+
+```python
+"""
+- V4PromptConfig: Advanced prompt configuration
+  - Coordinate-based prompting
+  - Order-based prompting
+- V4CharacterCaption: Character-specific prompting with positioning
+"""
+```
+
+Note: Basic img2img functionality works with V4 preview. For inpainting, the node will automatically use V3 model but can still work on V4-generated images. Vibe transfer will be supported once V4 fully releases.
