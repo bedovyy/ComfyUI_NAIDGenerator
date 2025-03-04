@@ -231,7 +231,7 @@ class GenerateNAID:
                 action = "infill"
                 image, mask, add_original_image = option["infill"]
                 params["image"] = image_to_base64(resize_image(image, (width, height)))
-                params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height)))
+                params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height), "4" in model))
                 params["add_original_image"] = add_original_image
 
             if "vibe" in option:

@@ -121,12 +121,14 @@ def resize_image(image, size_to):
     s = s.movedim(1,-1)
     return s
 
-def resize_to_naimask(mask, image_size=None):
+def resize_to_naimask(mask, image_size=None, is_v4=False):
     samples = mask.movedim(-1,1)
     w, h = (samples.shape[3], samples.shape[2]) if not image_size else image_size
     width = int(np.ceil(w / 64) * 8)
     height = int(np.ceil(h / 64) * 8)
     s = comfy.utils.common_upscale(samples, width, height, "nearest-exact", "disabled")
+    if is_v4:
+        s = comfy.utils.common_upscale(s, width*8, height*8, "nearest-exact", "disabled")
     s = s.movedim(1,-1)
     return s
 
