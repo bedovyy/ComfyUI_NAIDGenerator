@@ -40,7 +40,7 @@ class ModelOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full"], { "default": "nai-diffusion-4-full" }),
+                "model": (["nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full"], { "default": "nai-diffusion-4-full" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -219,6 +219,10 @@ class GenerateNAID:
         }
         model = "nai-diffusion-4-full"
         action = "generate"
+
+        if sampler == "k_euler_ancestral" and scheduler != "native":
+            params["deliberate_euler_ancestral_bug"] = False
+            params["prefer_brownian"] = True
 
         if option:
             if "img2img" in option:
