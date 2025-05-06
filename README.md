@@ -128,7 +128,7 @@ Support has been added for **NAI Diffusion 4.5 Curated Preview**, an updated ver
 
 - **Compatibility Notes:**
   - Works the same as V4 preview, with the same limitations:
-    - Inpainting will still default to V3 backend
+    - Inpainting will still default to V4 backend
     - Vibe transfer is not yet supported
   - Prompt formatting remains the same as for V4 (`V4BasePrompt` and `V4NegativePrompt` nodes are compatible)
 
