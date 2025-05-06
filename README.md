@@ -113,6 +113,26 @@ The node now supports NAI's V4 architecture through the nai-diffusion-4-curated-
   - Vibe transfer is not yet supported with V4 preview (will be available with full V4 release)
   - Full V4 feature support will come with the official V4 release
 
+
+### V4.5 Support (Curated Preview)
+
+Support has been added for **NAI Diffusion 4.5 Curated Preview**, an updated version of V4 with further improvements in detail, contrast, and prompt responsiveness.
+
+- **Model Name:**  
+  ```python
+  model = "nai-diffusion-4-5-curated-preview"
+  ```
+
+- **Availability:**  
+  Selectable through `ModelOptionNAID` node under the name **NAI Diffusion 4.5 Curated Preview**.
+
+- **Compatibility Notes:**
+  - Works the same as V4 preview, with the same limitations:
+    - Inpainting will still default to V4 backend
+    - Vibe transfer is not yet supported
+  - Prompt formatting remains the same as for V4 (`V4BasePrompt` and `V4NegativePrompt` nodes are compatible)
+
+
 #### New Model Option
 
 NAI Diffusion V4 Curated Preview is now available in the ModelOptionNAID node:
