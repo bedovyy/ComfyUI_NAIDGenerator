@@ -14,13 +14,14 @@ class PromptToNAID:
         return { "required": {
             "text": ("STRING", { "forceInput":True, "multiline": True, "dynamicPrompts": False,}),
             "weight_per_brace": ("FLOAT", { "default": 0.05, "min": 0.05, "max": 0.10, "step": 0.05 }),
+            "syntax_mode": (["brace", "numeric"], { "default": "brace" }),
         }}
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
     CATEGORY = "NovelAI/utils"
-    def convert(self, text, weight_per_brace):
-        nai_prompt = prompt_to_nai(text, weight_per_brace)
+    def convert(self, text, weight_per_brace, syntax_mode):
+        nai_prompt = prompt_to_nai(text, weight_per_brace, syntax_mode)
         return (nai_prompt,)
 
 class ImageToNAIMask:
