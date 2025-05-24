@@ -189,7 +189,7 @@ def prompt_stack_to_nai(l, weight_per_brace=0.05, syntax_mode="brace"):
                 brace_count = round((weight - 1.0) / weight_per_brace)
                 result += "{" * brace_count + "[" * -brace_count + prompt + "}" * brace_count + "]" * -brace_count
             elif syntax_mode == "numeric":
-                result += f"{weight:g}::{prompt}::"
+                result += f"{weight:g}::{prompt} ::"
         else:
             result += el
     return result
