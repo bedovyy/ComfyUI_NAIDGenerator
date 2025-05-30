@@ -41,7 +41,7 @@ class ModelOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated"], { "default": "nai-diffusion-4-5-curated" }),
+                "model": (["nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-5-full"], { "default": "nai-diffusion-4-5-full" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -218,7 +218,7 @@ class GenerateNAID:
                 }
             }
         }
-        model = "nai-diffusion-4-full"
+        model = "nai-diffusion-4-5-full"
         action = "generate"
 
         if sampler == "k_euler_ancestral" and scheduler != "native":
@@ -257,7 +257,7 @@ class GenerateNAID:
         retry = option["retry"] if option and "retry" in option else None
 
         if limit_opus_free:
-            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated") else 640*640
+            pixel_limit = 1024*1024
             if width * height > pixel_limit:
                 max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
@@ -268,10 +268,10 @@ class GenerateNAID:
         if variety:
             params["skip_cfg_above_sigma"] = calculate_skip_cfg_above_sigma(params["width"], params["height"])
 
-        if sampler == "ddim" and model in ("nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated"):
+        if sampler == "ddim" and model not in ("nai-diffusion-2"):
             params["sampler"] = "ddim_v3"
 
-        if action == "infill" and model != "nai-diffusion-4-5-curated":
+        if action == "infill" and model not in ("nai-diffusion-2"):
             model = f"{model}-inpainting"
 
         image = blank_image()
