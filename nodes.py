@@ -14,14 +14,13 @@ class PromptToNAID:
         return { "required": {
             "text": ("STRING", { "forceInput":True, "multiline": True, "dynamicPrompts": False,}),
             "weight_per_brace": ("FLOAT", { "default": 0.05, "min": 0.05, "max": 0.10, "step": 0.05 }),
-            "syntax_mode": (["brace", "numeric"], { "default": "brace" }),
         }}
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
     CATEGORY = "NovelAI/utils"
-    def convert(self, text, weight_per_brace, syntax_mode):
-        nai_prompt = prompt_to_nai(text, weight_per_brace, syntax_mode)
+    def convert(self, text, weight_per_brace):
+        nai_prompt = prompt_to_nai(text, weight_per_brace)
         return (nai_prompt,)
 
 class ImageToNAIMask:
@@ -218,7 +217,7 @@ class GenerateNAID:
                 }
             }
         }
-        model = "nai-diffusion-4-5-full"
+        model = "nai-diffusion-4-full"
         action = "generate"
 
         if sampler == "k_euler_ancestral" and scheduler != "native":
@@ -257,7 +256,7 @@ class GenerateNAID:
         retry = option["retry"] if option and "retry" in option else None
 
         if limit_opus_free:
-            pixel_limit = 1024*1024
+            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-5-full") else 640*640
             if width * height > pixel_limit:
                 max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
@@ -268,10 +267,10 @@ class GenerateNAID:
         if variety:
             params["skip_cfg_above_sigma"] = calculate_skip_cfg_above_sigma(params["width"], params["height"])
 
-        if sampler == "ddim" and model not in ("nai-diffusion-2"):
+        if sampler == "ddim" and model in ("nai-diffusion-furry-3", "nai-diffusion-3", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-5-full"):
             params["sampler"] = "ddim_v3"
 
-        if action == "infill" and model not in ("nai-diffusion-2"):
+        if action == "infill" and model != "nai-diffusion-4-5-full":
             model = f"{model}-inpainting"
 
         image = blank_image()
