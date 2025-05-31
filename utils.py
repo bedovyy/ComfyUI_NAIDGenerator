@@ -158,7 +158,7 @@ def prompt_to_stack(sentence):
                 stack[-1]["data"].append({ "weight": 1.0, "data": [] });
                 stack.append(stack[-1]["data"][-1])
             elif c == ')':
-                searched = re.search(r"^(.*):([0-9\.]+)$", current_str)
+                searched = re.search(r"^(.*):(-?[0-9\.]+)$", current_str)
                 current_str, weight = searched.groups() if searched else (current_str, 1.1)
                 if current_str: stack[-1]["data"].append(current_str)
                 stack[-1]["weight"] = float(weight)
@@ -177,15 +177,22 @@ def prompt_to_stack(sentence):
 
     return result
 
-def prompt_stack_to_nai(l, weight_per_brace=0.05):
+def prompt_stack_to_nai(l, weight_per_brace=0.05, syntax_mode="brace"):
     result = ""
     for el in l:
         if isinstance(el, dict):
-            brace_count = round((el["weight"] - 1.0) / weight_per_brace)
-            result += "{" * brace_count + "[" * -brace_count + prompt_stack_to_nai(el["data"]) + "}" * brace_count + "]" * -brace_count
+            weight = el["weight"]
+            prompt = prompt_stack_to_nai(el["data"], weight_per_brace, syntax_mode)
+            if weight < 0:
+                syntax_mode = "numeric"
+            if syntax_mode == "brace":
+                brace_count = round((weight - 1.0) / weight_per_brace)
+                result += "{" * brace_count + "[" * -brace_count + prompt + "}" * brace_count + "]" * -brace_count
+            elif syntax_mode == "numeric":
+                result += f"{weight:g}::{prompt} ::"
         else:
             result += el
     return result
 
-def prompt_to_nai(prompt, weight_per_brace=0.05):
-    return prompt_stack_to_nai(prompt_to_stack(prompt.replace("\(", "（").replace("\)", "）")), weight_per_brace).replace("（", "(").replace("）",")")
+def prompt_to_nai(prompt, weight_per_brace=0.05, syntax_mode="brace"):
+    return prompt_stack_to_nai(prompt_to_stack(prompt.replace("\(", "（").replace("\)", "）")), weight_per_brace, syntax_mode).replace("（", "(").replace("）",")")
