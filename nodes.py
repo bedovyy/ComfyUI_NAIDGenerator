@@ -15,7 +15,6 @@ import numpy as np
 from PIL import Image as PILImage
 
 TOOLTIP_LIMIT_OPUS_FREE = "Limit image size and steps for free generation by Opus."
-
 # ------------------------------------------------------------------
 # Helper utilities
 # ------------------------------------------------------------------
@@ -254,6 +253,65 @@ class CharacterReferenceOption:
         }
         return (option,)
 
+
+# -------------------------------------------------
+# Precise Reference (V4.5 only)
+# -------------------------------------------------
+
+class PreciseReferenceOption:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "mode": (
+                    ["Character & Style", "Character", "Style"],
+                    {"default": "Character & Style", "tooltip": "What NovelAI should extract from the reference image."}
+                ),
+                "strength": ("FLOAT", {
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.01,
+                    "display": "number",
+                    "tooltip": "Precise Reference strength."
+                }),
+                "fidelity": ("FLOAT", {
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.01,
+                    "display": "number",
+                    "tooltip": "Precise Reference fidelity."
+                }),
+            },
+            "optional": {"option": ("NAID_OPTION",),}
+        }
+
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI"
+
+    def set_option(self, image, mode, strength, fidelity, option=None):
+        option = copy.deepcopy(option) if option else {}
+
+        mode_map = {
+            "Character & Style": "character&style",
+            "Character": "character",
+            "Style": "style",
+        }
+
+        if "precise_reference" not in option:
+            option["precise_reference"] = []
+
+        option["precise_reference"].append({
+            "image": image,
+            "mode": mode_map[mode],
+            "strength": max(0.0, min(1.0, strength)),
+            "fidelity": max(0.0, min(1.0, fidelity)),
+        })
+        return (option,)
+
 # -------------------------------------------------
 # Generation Node
 # -------------------------------------------------
@@ -384,6 +442,55 @@ class GenerateNAID:
                 params["director_reference_secondary_strength_values"] = [1.0 - ref["fidelity"]]
                 params["director_reference_information_extracted"] = [1.0]
 
+            if "precise_reference" in option:
+                if model not in ["nai-diffusion-4-5-curated", "nai-diffusion-4-5-full"]:
+                    raise ValueError("Precise Reference is only supported on NovelAI V4.5 Curated and V4.5 Full.")
+
+                refs = option["precise_reference"]
+                if isinstance(refs, dict):
+                    refs = [refs]
+
+                # Match NovelAI web payload more closely for multi Precise Reference.
+                # The older params_version=1/director_reference_images payload works for a
+                # single reference, but multi-reference behavior is more reliable with the
+                # V4.5 params_version=3 fields enabled.
+                params["params_version"] = 3
+                params["use_coords"] = False
+                params["legacy_uc"] = False
+                params["characterPrompts"] = []
+                params["inpaintImg2ImgStrength"] = 1
+                params["normalize_reference_strength_multiple"] = True
+                params["v4_prompt"]["use_order"] = True
+                params["v4_negative_prompt"]["legacy_uc"] = False
+
+                params["director_reference_images"] = []
+                params["director_reference_descriptions"] = []
+                params["director_reference_information_extracted"] = []
+                params["director_reference_strength_values"] = []
+                params["director_reference_secondary_strength_values"] = []
+
+                for ref in refs:
+                    ref_img = ref["image"]
+
+                    _, h_raw, w_raw, _ = ref_img.shape
+                    canvas_w, canvas_h = _choose_cr_canvas(w_raw, h_raw)
+                    padded = pad_image_to_canvas(ref_img, (canvas_w, canvas_h))
+
+                    params["director_reference_images"].append(image_to_base64(padded))
+                    params["director_reference_descriptions"].append({
+                        "use_coords": False,
+                        "use_order": False,
+                        "legacy_uc": False,
+                        "caption": {
+                            "base_caption": ref["mode"],
+                            "char_captions": []
+                        }
+                    })
+
+                    params["director_reference_information_extracted"].append(1)
+                    params["director_reference_strength_values"].append(ref["strength"])
+                    params["director_reference_secondary_strength_values"].append(1.0 - ref["fidelity"])
+
         timeout = option.get("timeout", 120) if option else 120
         retry = option.get("retry", 3) if option else 3
 
@@ -401,6 +508,8 @@ class GenerateNAID:
         try:
             user_data = _get_user_data(self.access_token, timeout, retry)
             start_anlas = user_data.get("subscription", {}).get("trainingStepsLeft")
+            if isinstance(start_anlas, dict):
+                start_anlas = start_anlas.get("fixedTrainingStepsLeft", 0) + start_anlas.get("purchasedTrainingSteps", 0)
             if start_anlas is not None: print(f"[NovelAI] Anlas (pre-gen): {start_anlas}")
         except Exception as e: print(f"[NovelAI] Anlas tracking failed (pre-gen): {e}")
 
@@ -420,6 +529,8 @@ class GenerateNAID:
                 try:
                     user_data_final = _get_user_data(self.access_token, timeout, retry)
                     final_anlas = user_data_final.get("subscription", {}).get("trainingStepsLeft")
+                    if isinstance(final_anlas, dict):
+                        final_anlas = final_anlas.get("fixedTrainingStepsLeft", 0) + final_anlas.get("purchasedTrainingSteps", 0)
                     if final_anlas is not None:
                         print(f"[NovelAI] Generation cost: {start_anlas - final_anlas} Anlas")
                         print(f"[NovelAI] Anlas (post-gen): {final_anlas}")
@@ -626,6 +737,7 @@ NODE_CLASS_MAPPINGS = {
     "VibeTransferOptionNAID": VibeTransferOption,
     "NetworkOptionNAID": NetworkOption,
     "CharacterReferenceOptionNAID": CharacterReferenceOption,
+    "PreciseReferenceOptionNAID": PreciseReferenceOption,
     "AnlasTrackerNAID": AnlasTrackerNAID, # New node
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
@@ -647,6 +759,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "CharacterReferenceOptionNAID": "Character Reference ✒️🅝🅐🅘",
+    "PreciseReferenceOptionNAID": "Precise Reference ✒️🅝🅐🅘",
     "AnlasTrackerNAID": "Anlas Tracker ✒️🅝🅐🅘", # New node
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
