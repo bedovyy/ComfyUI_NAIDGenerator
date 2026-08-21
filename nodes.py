@@ -191,7 +191,7 @@ class VibeTransferOption:
             "required": {
                 "image": ("IMAGE",),
                 "information_extracted": ("FLOAT", { "default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
-                "strength": ("FLOAT", { "default": 0.6, "min": 0.01, "max": 1.0, "step": 0.01, "display": "number" }),
+                "strength": ("FLOAT", { "default": 0.6, "min": -1.0, "max": 1.0, "step": 0.01, "display": "number" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -203,6 +203,114 @@ class VibeTransferOption:
         if "vibe" not in option:
             option["vibe"] = []
         option["vibe"].append((image, information_extracted, strength))
+        return (option,)
+
+class LoadVibeFileOption:
+    MODEL_ENCODING_KEYS = {
+        "nai-diffusion-4-curated-preview": "v4curated",
+        "nai-diffusion-4-full": "v4full",
+        "nai-diffusion-4-5-curated": "v4-5curated",
+        "nai-diffusion-4-5-full": "v4-5full",
+    }
+
+    @classmethod
+    def INPUT_TYPES(s):
+        input_dir = Path(folder_paths.get_input_directory())
+        vibe_dir = input_dir / "vibes"
+        files = []
+        if vibe_dir.is_dir():
+            for path in vibe_dir.iterdir():
+                if path.is_file() and path.suffix.lower() in [".naiv4vibe", ".naiv4vibebundle"]:
+                    files.append(str(Path("vibes") / path.name))
+        for path in input_dir.iterdir():
+            if path.is_file() and path.suffix.lower() in [".naiv4vibe", ".naiv4vibebundle"]:
+                files.append(path.name)
+        if not files:
+            files = ["Put .naiv4vibe files in ComfyUI/input/vibes"]
+        file_choices = [""] + sorted(files)
+        model_choices = ["auto", "nai-diffusion-4-curated-preview", "nai-diffusion-4-full", "nai-diffusion-4-5-curated", "nai-diffusion-4-5-full"]
+
+        return {
+            "required": {
+                "vibe_file": (file_choices,),
+                "model_compat": (model_choices, { "default": "auto", "advanced": True, "tooltip": "Compatibility only. Encoding is selected automatically from the vibe file." }),
+                "strength_mode": (["use file strength", "override strength", True, False] + model_choices, { "default": "use file strength" }),
+                "override_strength": ("STRING", { "default": "0.6", "multiline": False, "tooltip": "Used only when strength_mode is override strength. Kept as text so older workflows migrate without validation errors." }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI/utils"
+
+    @classmethod
+    def _extract_encoding(cls, vibe, model):
+        encodings = vibe.get("encodings") or {}
+        if not encodings:
+            raise ValueError("Vibe file does not contain encodings")
+
+        key = None
+        if model != "auto":
+            key = cls.MODEL_ENCODING_KEYS.get(model)
+        if key not in encodings:
+            import_model = vibe.get("importInfo", {}).get("model")
+            key = cls.MODEL_ENCODING_KEYS.get(import_model)
+        if key not in encodings:
+            key = next(iter(encodings.keys()))
+
+        encoding_group = encodings[key]
+        if not isinstance(encoding_group, dict) or not encoding_group:
+            raise ValueError(f"No encoding data found for {key}")
+
+        encoding_entry = encoding_group.get("unknown") or next(iter(encoding_group.values()))
+        encoding = encoding_entry.get("encoding") if isinstance(encoding_entry, dict) else None
+        information_extracted = None
+        if isinstance(encoding_entry, dict):
+            information_extracted = (encoding_entry.get("params") or {}).get("information_extracted")
+        if information_extracted is None:
+            information_extracted = vibe.get("importInfo", {}).get("information_extracted", 1.0)
+        if not encoding:
+            raise ValueError(f"No encoding string found for {key}")
+        return encoding, float(information_extracted)
+
+    def set_option(self, vibe_file, model_compat, strength_mode, override_strength, option=None):
+        option = copy.deepcopy(option) if option else {}
+        if not vibe_file:
+            input_dir = Path(folder_paths.get_input_directory())
+            candidates = []
+            for base in [input_dir / "vibes", input_dir]:
+                if base.is_dir():
+                    for path in base.iterdir():
+                        if path.is_file() and path.suffix.lower() in [".naiv4vibe", ".naiv4vibebundle"]:
+                            candidates.append(str(path.relative_to(input_dir)))
+            if not candidates:
+                raise FileNotFoundError("No vibe files found. Put .naiv4vibe or .naiv4vibebundle files in ComfyUI/input/vibes and refresh/restart ComfyUI.")
+            vibe_file = sorted(candidates)[0]
+        if vibe_file.startswith("Put .naiv4vibe files"):
+            raise FileNotFoundError("No vibe files found. Put .naiv4vibe or .naiv4vibebundle files in ComfyUI/input/vibes and refresh/restart ComfyUI.")
+
+        path = Path(folder_paths.get_input_directory()) / vibe_file
+        if not path.is_file():
+            raise FileNotFoundError(f"Vibe file not found: {vibe_file}")
+
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        vibes = data.get("vibes") if data.get("identifier") == "novelai-vibe-transfer-bundle" else [data]
+        if not vibes:
+            raise ValueError("No vibes found in file")
+
+        if "encoded_vibe" not in option:
+            option["encoded_vibe"] = []
+        for vibe in vibes:
+            encoding, information_extracted = self._extract_encoding(vibe, "auto")
+            if strength_mode != "override strength":
+                vibe_strength = vibe.get("importInfo", {}).get("strength", 0.6)
+            else:
+                try:
+                    vibe_strength = float(override_strength)
+                except (TypeError, ValueError):
+                    vibe_strength = vibe.get("importInfo", {}).get("strength", 0.6)
+            option["encoded_vibe"].append((encoding, information_extracted, float(vibe_strength)))
         return (option,)
 
 class NetworkOption:
@@ -399,6 +507,17 @@ class GenerateNAID:
                 for vibe in option["vibe"]:
                     vimg, information_extracted, strength = vibe
                     params["reference_image_multiple"].append(image_to_base64(resize_image(vimg, (width, height))))
+                    params["reference_information_extracted_multiple"].append(information_extracted)
+                    params["reference_strength_multiple"].append(strength)
+
+            if "encoded_vibe" in option:
+                for vibe in option["encoded_vibe"]:
+                    if len(vibe) == 3:
+                        encoding, information_extracted, strength = vibe
+                    else:
+                        encoding, strength = vibe
+                        information_extracted = 1.0
+                    params["reference_image_multiple"].append(encoding)
                     params["reference_information_extracted_multiple"].append(information_extracted)
                     params["reference_strength_multiple"].append(strength)
 
@@ -673,6 +792,7 @@ NODE_CLASS_MAPPINGS = {
     "Img2ImgOptionNAID": Img2ImgOption,
     "InpaintingOptionNAID": InpaintingOption,
     "VibeTransferOptionNAID": VibeTransferOption,
+    "LoadVibeFileOptionNAID": LoadVibeFileOption,
     "NetworkOptionNAID": NetworkOption,
     "CharacterReferenceOptionNAID": CharacterReferenceOption,
     "CharacterPromptOptionNAID": CharacterPromptOption,
@@ -695,6 +815,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
+    "LoadVibeFileOptionNAID": "Load Vibe File ✒️🅝🅐🅘",
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "CharacterReferenceOptionNAID": "Character Reference ✒️🅝🅐🅘",
     "CharacterPromptOptionNAID": "Character Prompt ✒️🅝🅐🅘",
