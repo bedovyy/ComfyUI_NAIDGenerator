@@ -130,7 +130,9 @@ class ModelOption:
                     "nai-diffusion-4-curated-preview",
                     "nai-diffusion-4-full",
                     "nai-diffusion-4-5-curated",
-                    "nai-diffusion-4-5-full"
+                    "nai-diffusion-4-5-full",
+                    "nai-diffusion-5-curated",
+                    "nai-diffusion-5-full"
                 ], { "default": "nai-diffusion-4-5-full" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
@@ -255,6 +257,38 @@ class CharacterReferenceOption:
         return (option,)
 
 # -------------------------------------------------
+# Character Prompt (Multi-Character Text Prompting)
+# -------------------------------------------------
+
+class CharacterPromptOption:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "positive": ("STRING", { "multiline": True, "dynamicPrompts": False, "tooltip": "This character's positive caption." }),
+                "negative": ("STRING", { "default": "", "multiline": True, "dynamicPrompts": False, "tooltip": "This character's negative caption." }),
+                "use_position": ("BOOLEAN", { "default": False, "tooltip": "Pin this character to x/y instead of letting the model place it automatically." }),
+                "x": ("FLOAT", { "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "display": "number", "tooltip": "Horizontal position (0=left, 1=right). Only used when use_position is enabled." }),
+                "y": ("FLOAT", { "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "display": "number", "tooltip": "Vertical position (0=top, 1=bottom). Only used when use_position is enabled." }),
+                "use_order": ("BOOLEAN", { "default": False, "tooltip": "Use the connection order of character prompt nodes as a priority when characters overlap. Applies to the whole group of chained character prompts." }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI"
+    def set_option(self, positive, negative, use_position, x, y, use_order, option=None):
+        option = copy.deepcopy(option) if option else {}
+        if "characters" not in option:
+            option["characters"] = []
+        option["characters"].append({
+            "positive": positive, "negative": negative,
+            "use_position": use_position, "x": x, "y": y,
+            "use_order": use_order,
+        })
+        return (option,)
+
+# -------------------------------------------------
 # Generation Node
 # -------------------------------------------------
 
@@ -358,7 +392,7 @@ class GenerateNAID:
                 action = "infill"
                 image, mask, add_original_image = option["infill"]
                 params["image"] = image_to_base64(resize_image(image, (width, height)))
-                params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height), "4" in model))
+                params["mask"] = naimask_to_base64(resize_to_naimask(mask, (width, height), "nai-diffusion-4" in model or "nai-diffusion-5" in model))
                 params["add_original_image"] = add_original_image
 
             if "vibe" in option:
@@ -370,6 +404,21 @@ class GenerateNAID:
 
             if "model" in option: model = option["model"]
             if "v4_prompt" in option: params["v4_prompt"].update(option["v4_prompt"])
+
+            if "characters" in option:
+                chars = option["characters"]
+                use_coords = any(c["use_position"] for c in chars)
+                use_order = any(c["use_order"] for c in chars)
+                params["v4_prompt"]["caption"]["char_captions"] = [
+                    {"char_caption": c["positive"], "centers": [{"x": c["x"], "y": c["y"]}]} for c in chars
+                ]
+                params["v4_prompt"]["use_coords"] = use_coords
+                params["v4_prompt"]["use_order"] = use_order
+                params["v4_negative_prompt"]["caption"]["char_captions"] = [
+                    {"char_caption": c["negative"], "centers": [{"x": c["x"], "y": c["y"]}]} for c in chars
+                ]
+                params["v4_negative_prompt"]["use_coords"] = use_coords
+                params["v4_negative_prompt"]["use_order"] = use_order
 
             if "character_reference_single" in option:
                 ref = option["character_reference_single"]
@@ -626,6 +675,7 @@ NODE_CLASS_MAPPINGS = {
     "VibeTransferOptionNAID": VibeTransferOption,
     "NetworkOptionNAID": NetworkOption,
     "CharacterReferenceOptionNAID": CharacterReferenceOption,
+    "CharacterPromptOptionNAID": CharacterPromptOption,
     "AnlasTrackerNAID": AnlasTrackerNAID, # New node
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
@@ -647,6 +697,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "CharacterReferenceOptionNAID": "Character Reference ✒️🅝🅐🅘",
+    "CharacterPromptOptionNAID": "Character Prompt ✒️🅝🅐🅘",
     "AnlasTrackerNAID": "Anlas Tracker ✒️🅝🅐🅘", # New node
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",

@@ -86,6 +86,10 @@ Available V4+ models include:
 - `nai-diffusion-4-full`
 - `nai-diffusion-4-5-curated`
 - `nai-diffusion-4-5-full`
+- `nai-diffusion-5-curated`
+- `nai-diffusion-5-full`
+
+**Note:** NovelAI Diffusion V5 launched on 2026-08-21. The `nai-diffusion-5-*` identifiers above follow NovelAI's established naming convention but have not been independently confirmed against the live API yet — if generation fails with an unrecognized model error, please open an issue so the identifier can be corrected.
 
 ![ModelOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/0b484edb-bcb5-428a-b2af-1372a9d7a34f)
 
@@ -130,20 +134,20 @@ You can find director tools like `LineArtNAID`, `EmotionNAID`, and `RemoveBGNAID
 
 ![augment_example](https://github.com/user-attachments/assets/5833e9fb-f92e-4d53-9069-58ca8503a3e7)
 
-### V4 / V4.5 Support
+### V4 / V4.5 / V5 Support
 
-The nodes fully support NAI's V4 and V4.5 model architecture.
+The nodes fully support NAI's V4, V4.5 and V5 model architecture.
 
 #### V4 Prompt Handling
 
-Two new nodes have been added in `NovelAI/v4` for V4/V4.5 prompt handling:
+Two new nodes have been added in `NovelAI/v4` for V4/V4.5/V5 prompt handling:
 
 - **`V4BasePrompt`**: Handles the positive prompt.
 - **`V4NegativePrompt`**: Handles the negative prompt.
 
-#### Example V4 / V4.5 Workflow
+#### Example V4 / V4.5 / V5 Workflow
 
-Here's a basic setup for a V4/V4.5 model:
+Here's a basic setup for a V4/V4.5/V5 model:
 
 ```
 V4BasePrompt -----> positive
@@ -151,4 +155,14 @@ V4BasePrompt -----> positive
 V4NegativePrompt -> negative
 ```
 
-**Note:** Basic `img2img`, `vibe transfer` and `inpainting` functionality works with V4/V4.5.
+**Note:** Basic `img2img`, `vibe transfer` and `inpainting` functionality works with V4/V4.5/V5.
+
+### Character Prompt (Multi-Character Text Prompting)
+
+Connect one or more `CharacterPromptOptionNAID` nodes to the `option` input of `GenerateNAID` to give individual characters their own positive/negative captions, mirroring NAI's multi-character prompting feature (V4+). Chain multiple nodes together, one per character, the same way you would chain `VibeTransferOptionNAID` nodes.
+
+- **positive / negative:** Per-character captions, merged into the request's `char_captions`.
+- **use_position / x / y:** Enable to pin the character to a specific normalized position (`0.0`-`1.0`) instead of letting the model place it automatically. If any chained character enables this, positioning is used for the whole group.
+- **use_order:** Treat the connection order of the chained character nodes as a priority hint for overlapping characters. If any chained character enables this, it applies to the whole group.
+
+**Note:** This is independent of `CharacterReferenceOptionNAID`, which guides generation from a reference *image* rather than text.
