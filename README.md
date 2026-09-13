@@ -89,7 +89,7 @@ Available V4+ models include:
 - `nai-diffusion-5-curated`
 - `nai-diffusion-5-full`
 
-**Note:** NovelAI Diffusion V5 launched on 2026-08-21. The `nai-diffusion-5-*` identifiers above follow NovelAI's established naming convention but have not been independently confirmed against the live API yet — if generation fails with an unrecognized model error, please open an issue so the identifier can be corrected.
+**Note:** NovelAI Diffusion V5 launched on 2026-08-21. The `nai-diffusion-5-*` identifiers above have been verified against the live API (the PNGs written to `output/NAI_autosave_*.png` report `Source: NovelAI Diffusion V5 …`).
 
 ![ModelOption](https://github.com/bedovyy/ComfyUI_NAIDGenerator/assets/137917911/0b484edb-bcb5-428a-b2af-1372a9d7a34f)
 
