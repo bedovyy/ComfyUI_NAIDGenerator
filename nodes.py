@@ -25,7 +25,7 @@ ACCEPTED_CR_SIZES = [(1024, 1536), (1536, 1024), (1472, 1472)]
 
 def _get_user_data(access_token, timeout=120, retry=3):
     """Fetches user data to check Anlas balance. Now a global helper."""
-    USER_API_BASE_URL = "https://api.novelai.net"
+    USER_API_BASE_URL = "https://image.novelai.net"  # user endpoints moved; api.novelai.net now answers 400 "Please refresh NovelAI.net"
 
     req_mod = requests
     if retry is not None and retry > 1:
@@ -46,7 +46,13 @@ def _get_user_data(access_token, timeout=120, retry=3):
     )
 
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    # image.novelai.net returns trainingStepsLeft as {"fixedTrainingStepsLeft": n, "purchasedTrainingSteps": m};
+    # normalize to the int total the rest of this file expects (start_anlas - final_anlas).
+    steps = data.get("subscription", {}).get("trainingStepsLeft")
+    if isinstance(steps, dict):
+        data["subscription"]["trainingStepsLeft"] = int(steps.get("fixedTrainingStepsLeft", 0) or 0) + int(steps.get("purchasedTrainingSteps", 0) or 0)
+    return data
 
 def _choose_cr_canvas(w, h):
     """Select the accepted CR canvas size whose aspect ratio is closest to the source image."""
