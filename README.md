@@ -105,8 +105,7 @@ You can set timeout and retry options using the `NetworkOption` node. You can al
 
 Use the `MergeOptionsNAID` node to combine up to 4 `NAID_OPTION` inputs into one. Instead of chaining every option node in a single line, you can connect them in parallel, which makes it easier to rearrange your workflow or toggle individual options on and off.
 
-<!-- TODO: Replace with the URL of the image uploaded to the PR -->
-![merge_options](IMAGE_URL_HERE)
+![merge_options](https://github.com/user-attachments/assets/87159843-0bc1-4bf4-a4a5-f31274747711)
 
 -   Unconnected inputs are ignored.
 -   To merge more than 4 options, connect the output of a `MergeOptionsNAID` node to an input of another `MergeOptionsNAID` node.
