@@ -289,6 +289,48 @@ class CharacterPromptOption:
         return (option,)
 
 # -------------------------------------------------
+# Option Merge
+# -------------------------------------------------
+
+class MergeOptions:
+    # Keys whose lists are concatenated (stacked across options)
+    APPEND_KEYS = ("vibe", "characters")
+    # Keys whose dicts are merged with update()
+    MERGE_KEYS = ("v4_prompt",)
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "option_1": ("NAID_OPTION",),
+                "option_2": ("NAID_OPTION",),
+                "option_3": ("NAID_OPTION",),
+                "option_4": ("NAID_OPTION",),
+            },
+        }
+
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "merge_options"
+    CATEGORY = "NovelAI"
+    def merge_options(self, option_1=None, option_2=None, option_3=None, option_4=None):
+        merged = {}
+        # Applied in order from option_1, so later inputs take precedence for overwritten keys
+        for option in (option_1, option_2, option_3, option_4):
+            if not option:
+                continue
+            for key, value in copy.deepcopy(option).items():
+                if key in self.APPEND_KEYS:
+                    # Concatenate lists for stackable keys
+                    merged.setdefault(key, []).extend(value)
+                elif key in self.MERGE_KEYS:
+                    # Merge dict contents
+                    merged.setdefault(key, {}).update(value)
+                else:
+                    # Overwrite all other keys
+                    merged[key] = value
+        return (merged,)
+
+# -------------------------------------------------
 # Generation Node
 # -------------------------------------------------
 
@@ -676,6 +718,7 @@ NODE_CLASS_MAPPINGS = {
     "NetworkOptionNAID": NetworkOption,
     "CharacterReferenceOptionNAID": CharacterReferenceOption,
     "CharacterPromptOptionNAID": CharacterPromptOption,
+    "MergeOptionsNAID": MergeOptions,
     "AnlasTrackerNAID": AnlasTrackerNAID, # New node
     "MaskImageToNAID": ImageToNAIMask,
     "PromptToNAID": PromptToNAID,
@@ -698,6 +741,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "CharacterReferenceOptionNAID": "Character Reference ✒️🅝🅐🅘",
     "CharacterPromptOptionNAID": "Character Prompt ✒️🅝🅐🅘",
+    "MergeOptionsNAID": "Merge Options ✒️🅝🅐🅘",
     "AnlasTrackerNAID": "Anlas Tracker ✒️🅝🅐🅘", # New node
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
     "PromptToNAID": "Convert Prompt ✒️🅝🅐🅘",
