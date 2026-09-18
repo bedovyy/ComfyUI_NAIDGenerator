@@ -101,6 +101,22 @@ You can set timeout and retry options using the `NetworkOption` node. You can al
 
 **Note:** If you set the timeout too short, you may not receive an image but could still be charged Anlas.
 
+### Merge Options
+
+Use the `MergeOptionsNAID` node to combine up to 4 `NAID_OPTION` inputs into one. Instead of chaining every option node in a single line, you can connect them in parallel, which makes it easier to rearrange your workflow or toggle individual options on and off.
+
+![merge_options](https://github.com/user-attachments/assets/87159843-0bc1-4bf4-a4a5-f31274747711)
+
+-   Unconnected inputs are ignored.
+-   To merge more than 4 options, connect the output of a `MergeOptionsNAID` node to an input of another `MergeOptionsNAID` node.
+
+Options are merged in order from `option_1` to `option_4`.
+
+-   **Stackable options:** `VibeTransferOptionNAID` and `CharacterPromptOptionNAID` entries are all stacked, just as they are when chained (entries from `option_1` come first).
+-   **Other options:** If the same kind of option, such as `ModelOptionNAID` or `NetworkOption`, is present in multiple inputs, the higher-numbered input takes precedence (`option_4` has the highest priority).
+
+**Note:** If you merge both `Img2ImgOptionNAID` and `InpaintingOptionNAID`, Img2Img takes precedence in `GenerateNAID`, as before.
+
 ### Anlas Tracker
 
 This extension now includes Anlas tracking to monitor your usage.
