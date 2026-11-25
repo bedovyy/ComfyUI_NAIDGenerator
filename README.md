@@ -77,6 +77,18 @@ Use the `CharacterReferenceOptionNAID` node to guide the generation using a sing
 
 **Note:** The reference image will be automatically letterboxed to an accepted NAI canvas size to preserve its aspect ratio.
 
+#### Character Reference V5 (Multiple Images)
+
+For NAI Diffusion V5 models, use the `CharacterReferenceV5OptionNAID` node. Chain multiple nodes together, one per reference image, the same way you would chain `VibeTransferOptionNAID` nodes. Up to 16 references are sent; any beyond that are dropped with a console warning.
+
+![character-reference-v5](https://github.com/user-attachments/assets/ffb04ab6-6e2e-4f59-86f4-58d76ef8f1c1)
+
+-   **reference_type:** What to take from the reference image: `character&style`, `character`, `style`, or `costume`.
+-   **include_outfit:** Also reference the character's outfit. Only used when `reference_type` is `character&style` or `character`.
+-   **strength:** How strongly the reference influences the generation (`0.0`-`5.0`).
+
+**Note:** V4.5 models use the original `CharacterReferenceOptionNAID` node (`style_aware` / `fidelity`).
+
 ### ModelOption
 
 The default model of the `GenerateNAID` node is `nai-diffusion-4-5-full`. To change the model, connect a `ModelOptionNAID` node.

@@ -23,6 +23,26 @@ TOOLTIP_LIMIT_OPUS_FREE = "Limit image size and steps for free generation by Opu
 # Accepted canvas sizes (per CR guidance); we will letterbox/pad to one of these
 ACCEPTED_CR_SIZES = [(1024, 1536), (1536, 1024), (1472, 1472)]
 
+# NAI ignores character references beyond this count
+MAX_CHARACTER_REFERENCES = 16
+
+def _cr_v5_base_caption(reference_type, include_outfit):
+    """Map a V5 character reference type and outfit toggle to the base_caption NAI expects."""
+    if reference_type == "character&style":
+        # Outfit is included by default; opting out adds a suffix
+        return "character&style" if include_outfit else "character&style_anyoutfit"
+    if reference_type == "character":
+        # Outfit is excluded by default; opting in adds a suffix
+        return "character_mainoutfit" if include_outfit else "character"
+    # "style" and "costume" have no outfit variant
+    return reference_type
+
+def _cr_image_to_base64(tensor_image):
+    """Letterbox a reference image to the closest accepted CR canvas and encode it."""
+    _, h_raw, w_raw, _ = tensor_image.shape
+    canvas_w, canvas_h = _choose_cr_canvas(w_raw, h_raw)
+    return image_to_base64(pad_image_to_canvas(tensor_image, (canvas_w, canvas_h)))
+
 def _get_user_data(access_token, timeout=120, retry=3):
     """Fetches user data to check Anlas balance. Now a global helper."""
     USER_API_BASE_URL = "https://api.novelai.net"
@@ -257,6 +277,36 @@ class CharacterReferenceOption:
         return (option,)
 
 # -------------------------------------------------
+# Character Reference V5 (Multiple Images)
+# -------------------------------------------------
+
+class CharacterReferenceV5Option:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "reference_type": (["character&style", "character", "style", "costume"], { "default": "character&style", "tooltip": "What to take from the reference image." }),
+                "include_outfit": ("BOOLEAN", { "default": True, "tooltip": "Also reference the outfit. Only used when reference_type is 'character&style' or 'character'." }),
+                "strength": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 5.0, "step": 0.01, "display": "number" }),
+            },
+            "optional": { "option": ("NAID_OPTION",) },
+        }
+    RETURN_TYPES = ("NAID_OPTION",)
+    FUNCTION = "set_option"
+    CATEGORY = "NovelAI"
+    def set_option(self, image, reference_type, include_outfit, strength, option=None):
+        option = copy.deepcopy(option) if option else {}
+        if "character_references" not in option:
+            option["character_references"] = []
+        option["character_references"].append({
+            "image": image,
+            "base_caption": _cr_v5_base_caption(reference_type, include_outfit),
+            "strength": strength,
+        })
+        return (option,)
+
+# -------------------------------------------------
 # Character Prompt (Multi-Character Text Prompting)
 # -------------------------------------------------
 
@@ -420,18 +470,35 @@ class GenerateNAID:
                 params["v4_negative_prompt"]["use_coords"] = use_coords
                 params["v4_negative_prompt"]["use_order"] = use_order
 
+            # Collect character references from both the single (V4.5) and multiple (V5) nodes
+            char_refs = []
             if "character_reference_single" in option:
                 ref = option["character_reference_single"]
                 base_caption = "character&style" if ref["style_aware"] else "character"
-                ref_img = ref["image"]
-                _, h_raw, w_raw, _ = ref_img.shape
-                canvas_w, canvas_h = _choose_cr_canvas(w_raw, h_raw)
-                padded = pad_image_to_canvas(ref_img, (canvas_w, canvas_h))
-                params["director_reference_images"] = [image_to_base64(padded)]
-                params["director_reference_descriptions"] = [{"use_coords": False, "use_order": False, "legacy_uc": False, "caption": {"base_caption": base_caption, "char_captions": []}}]
-                params["director_reference_strength_values"] = [1.0]
-                params["director_reference_secondary_strength_values"] = [1.0 - ref["fidelity"]]
-                params["director_reference_information_extracted"] = [1.0]
+                char_refs.append({
+                    "image": ref["image"],
+                    "description": {"use_coords": False, "use_order": False, "legacy_uc": False, "caption": {"base_caption": base_caption, "char_captions": []}},
+                    "strength": 1.0,
+                    "secondary_strength": 1.0 - ref["fidelity"],
+                })
+            for ref in option.get("character_references", []):
+                char_refs.append({
+                    "image": ref["image"],
+                    "description": {"legacy_uc": False, "caption": {"base_caption": ref["base_caption"], "char_captions": []}},
+                    "strength": ref["strength"],
+                    "secondary_strength": 0.0,
+                })
+
+            if len(char_refs) > MAX_CHARACTER_REFERENCES:
+                print(f"[NAID] {len(char_refs)} character references given; only the first {MAX_CHARACTER_REFERENCES} are sent.")
+                char_refs = char_refs[:MAX_CHARACTER_REFERENCES]
+
+            if char_refs:
+                params["director_reference_images"] = [_cr_image_to_base64(r["image"]) for r in char_refs]
+                params["director_reference_descriptions"] = [r["description"] for r in char_refs]
+                params["director_reference_strength_values"] = [r["strength"] for r in char_refs]
+                params["director_reference_secondary_strength_values"] = [r["secondary_strength"] for r in char_refs]
+                params["director_reference_information_extracted"] = [1.0 for _ in char_refs]
 
         timeout = option.get("timeout", 120) if option else 120
         retry = option.get("retry", 3) if option else 3
@@ -675,6 +742,7 @@ NODE_CLASS_MAPPINGS = {
     "VibeTransferOptionNAID": VibeTransferOption,
     "NetworkOptionNAID": NetworkOption,
     "CharacterReferenceOptionNAID": CharacterReferenceOption,
+    "CharacterReferenceV5OptionNAID": CharacterReferenceV5Option,
     "CharacterPromptOptionNAID": CharacterPromptOption,
     "AnlasTrackerNAID": AnlasTrackerNAID, # New node
     "MaskImageToNAID": ImageToNAIMask,
@@ -697,6 +765,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
     "NetworkOptionNAID": "NetworkOption ✒️🅝🅐🅘",
     "CharacterReferenceOptionNAID": "Character Reference ✒️🅝🅐🅘",
+    "CharacterReferenceV5OptionNAID": "Character Reference V5 ✒️🅝🅐🅘",
     "CharacterPromptOptionNAID": "Character Prompt ✒️🅝🅐🅘",
     "AnlasTrackerNAID": "Anlas Tracker ✒️🅝🅐🅘", # New node
     "MaskImageToNAID": "Convert Mask Image ✒️🅝🅐🅘",
